@@ -1,0 +1,149 @@
+---
+title: "Power calculations"
+author: "Daphne"
+date: "2025-09-16"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE, warning = FALSE)
+```
+
+Preliminary set up
+
+```{r}
+library(tidyverse)
+library(pwr)
+load("/Users/drutna/Library/CloudStorage/OneDrive-UniversitätZürichUZH/UZH Carbon Neutrality/4_Data/7_LEAF_Pilot/RawCosts.RData")
+pilot_bl_co2 <- tCO2_Baseline_Costs
+pilot_el_co2 <- tCO2_Program_Costs
+```
+
+# Power calculations for DID analysis
+
+## Calculating the s.d. and correlation from pilot data
+We use pilot data to estimate s.d. at bl and el, the correlation between bl and el, and the s.d. of change scores.
+
+Clean and merge the pilot data:
+```{r}
+# Clean bl data
+
+# Convert waste to tons
+pilot_bl_co2$Waste1 <- pilot_bl_co2$Waste1/1000
+
+# If waste exceeds 10 tons, set to NA (data entry error)
+pilot_bl_co2 <- pilot_bl_co2 %>%
+    mutate(Waste1 = ifelse(Waste1 > 10, NA, Waste1))
+
+# If fume cupboards exceeds 10 tons, divide by 1000 (data entry error)
+pilot_bl_co2 <- pilot_bl_co2 %>%
+    mutate(`Fume Cupboards1` = 
+    ifelse(`Fume Cupboards1` > 10, `Fume Cupboards1`/1000, `Fume Cupboards1`))
+
+
+# Create id and total_co2
+pilot_bl_co2 <- pilot_bl_co2 %>%
+  mutate(id = row_number()) %>%
+  filter(if_any(-id, ~ !is.na(.))) %>%
+  mutate(
+    total_co2 = rowSums(across(-id), na.rm = TRUE)
+  )
+# Clean el data
+
+# Convert waste to tons
+pilot_el_co2$Waste2 <- pilot_el_co2$Waste2/1000
+
+# If waste exceeds 10 tons, set to NA (seems like an error in data entry)
+pilot_el_co2 <- pilot_el_co2 %>%
+    mutate(Waste2 = ifelse(Waste2 > 10, NA, Waste2))
+
+# If fume cupboards exceeds 10 tons, divide by 1000 (data entry error)
+pilot_el_co2 <- pilot_el_co2 %>%
+    mutate(`Fume Cupboards2` = 
+    ifelse(`Fume Cupboards2` > 10, `Fume Cupboards2`/1000, `Fume Cupboards2`))
+
+# Create id and total_co2
+pilot_el_co2 <- pilot_el_co2 %>%
+  mutate(id = row_number()) %>%
+  filter(if_any(-id, ~ !is.na(.))) %>%
+  mutate(
+    total_co2 = rowSums(across(-id), na.rm = TRUE)
+  )
+
+# Merge
+merged_data <- full_join(
+  pilot_bl_co2,
+  pilot_el_co2,
+  by = "id",
+  suffix = c("_bl", "_el")
+)
+#Drop rows with NA in either total_co2_bl or total_co2_el
+merged_data <- merged_data %>%
+    filter(!is.na(total_co2_bl) & !is.na(total_co2_el))
+
+head(merged_data)
+```
+
+Calculate the s.d. at bl and el, the correlation, the sd of change scores, and the estimated impact:
+```{r}
+sd_bl <- sd(merged_data$total_co2_bl, na.rm = TRUE)
+sd_el <- sd(merged_data$total_co2_el, na.rm = TRUE)
+rho <- cor(merged_data$total_co2_bl, merged_data$total_co2_el)
+sigma_d <- sqrt(sd_bl^2 + sd_el^2 - 2 * rho * sd_bl * sd_el)
+beta <- mean(merged_data$total_co2_bl, na.rm = TRUE) - mean(merged_data$total_co2_el, na.rm = TRUE)
+print(paste("SD at bl:", round(sd_bl, 2)))
+print(paste("SD at el:", round(sd_el, 2)))
+print(paste("Correlation between bl and el:", round(rho, 2)))
+print(paste("SD of change scores:", round(sigma_d, 2)))
+print(paste("Estimated impact (mean change):", round(beta, 2)))
+```
+
+## Calculating power, MDE and sample size
+Calculate the power (using pilot data) and MDE:
+```{r}
+# Parameters
+alpha <- 0.05 # significance level
+n <- 100 # number of lab groups per arm
+power <- 0.8 # desired power
+
+# Calculate power
+power_res <- pwr.t.test(
+    n = n,
+    d = beta / sigma_d, 
+    sig.level = alpha,
+    type = "two.sample",
+    alternative = "two.sided"
+)
+power <- as.numeric(power_res[4])
+
+print(paste("Estimated power based on UZH pilot data:", 
+      round(power,3)))
+
+# Calculate MDE for 80% power
+mde_res <- pwr.t.test(
+    n = n,
+    power = 0.8,
+    sig.level = alpha,
+    type = "two.sample",
+    alternative = "two.sided"
+)
+mde <- as.numeric(mde_res[2])
+
+print(paste("Minimum detectable effect size (Cohen's d):", round(mde, 3)))
+
+# Calculate sample size for 80% power with estimated effect size
+n_res <- pwr.t.test(
+    d = beta / sigma_d,
+    power = 0.8,
+    sig.level = alpha,
+    type = "two.sample",
+    alternative = "two.sided"
+)
+n <- as.numeric(n_res[1])
+
+print(paste("Number of lab groups per arm:", ceiling(n)))
+
+```
