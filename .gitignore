@@ -211,3 +211,6 @@ __marimo__/
 
 # Trash folder
 z_old/
+
+# Personal configuration file
+config.py
