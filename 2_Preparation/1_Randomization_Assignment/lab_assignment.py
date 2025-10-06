@@ -37,9 +37,16 @@ def assign_enumerators(labs_df, enum_df, n_treat = 3, n_control = 3, seed = 110)
         treatment_labs = possible_labs[possible_labs["Treatment Status"] == "treatment"]
         control_labs = possible_labs[possible_labs["Treatment Status"] == "control"]
 
-        # Assign labs, checking if enough labs are available
+        # Number of available labs
         n_leftover_treat = len(treatment_labs)
         n_leftover_control = len(control_labs)
+
+        # Skip this enumerator if no labs available at all
+        if n_leftover_treat == 0 and n_leftover_control == 0:
+            print(f"No labs available for enumerator {enum['id']}. Skipping.")
+            continue
+
+        # Assign labs, checking if enough labs are available
         if n_leftover_treat < n_treat:
             if n_leftover_control < n_control: # Not enough T and C labs
                 print(f"Warning: Only {n_leftover_treat} treatment and {n_leftover_control} control labs available for enumerator.")
@@ -48,11 +55,13 @@ def assign_enumerators(labs_df, enum_df, n_treat = 3, n_control = 3, seed = 110)
             else:  # Not enough T labs
                 print(f"Warning: Only {n_leftover_treat} treatment labs available for enumerator.")
                 assigned_treat = treatment_labs
-                assigned_control = control_labs.sample(n=6-n_leftover_treat, random_state=rng, replace=False)
+                n_to_sample = min(6 - n_leftover_treat, n_leftover_control) # cap n to available labs
+                assigned_control = control_labs.sample(n=n_to_sample, random_state=rng, replace=False)
         elif n_leftover_control < n_control: # Not enough C labs
             print(f"Warning: Only {n_leftover_control} control labs available for enumerator.")
             assigned_control = control_labs
-            assigned_treat = treatment_labs.sample(n=6-n_leftover_control, random_state=rng, replace=False)
+            n_to_sample = min(6 - n_leftover_control, n_leftover_treat) # cap n to available labs
+            assigned_treat = treatment_labs.sample(n=n_to_sample, random_state=rng, replace=False)
         else: # Enough T and C labs
             assigned_treat = treatment_labs.sample(n=n_treat, random_state=rng, replace=False)
             assigned_control = control_labs.sample(n=n_control, random_state=rng, replace=False)
