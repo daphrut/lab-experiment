@@ -46,6 +46,9 @@ def assign_enumerators(labs_df, enum_df, n_treat = 3, n_control = 3, seed = 110)
             print(f"No labs available for enumerator {enum['id']}. Skipping.")
             continue
 
+        # Total number of labs needed
+        total_needed = n_treat + n_control
+
         # Assign labs, checking if enough labs are available
         if n_leftover_treat < n_treat:
             if n_leftover_control < n_control: # Not enough T and C labs
@@ -55,12 +58,12 @@ def assign_enumerators(labs_df, enum_df, n_treat = 3, n_control = 3, seed = 110)
             else:  # Not enough T labs
                 print(f"Warning: Only {n_leftover_treat} treatment labs available for enumerator.")
                 assigned_treat = treatment_labs
-                n_to_sample = min(6 - n_leftover_treat, n_leftover_control) # cap n to available labs
+                n_to_sample = min(total_needed - n_leftover_treat, n_leftover_control) # cap n to available labs
                 assigned_control = control_labs.sample(n=n_to_sample, random_state=rng, replace=False)
         elif n_leftover_control < n_control: # Not enough C labs
             print(f"Warning: Only {n_leftover_control} control labs available for enumerator.")
             assigned_control = control_labs
-            n_to_sample = min(6 - n_leftover_control, n_leftover_treat) # cap n to available labs
+            n_to_sample = min(total_needed - n_leftover_control, n_leftover_treat) # cap n to available labs
             assigned_treat = treatment_labs.sample(n=n_to_sample, random_state=rng, replace=False)
         else: # Enough T and C labs
             assigned_treat = treatment_labs.sample(n=n_treat, random_state=rng, replace=False)
