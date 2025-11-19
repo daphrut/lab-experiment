@@ -214,3 +214,6 @@ z_old/
 
 # Personal configuration file
 config.py
+
+# Internal notes on data cleaning
+1_Cleaning/data_cleaning_notes.docx
