@@ -65,7 +65,7 @@ def clean_unique_values(df, file_name, var_name, sheet_name,
             out[c] = out[c].astype("string").str.strip()
             out.loc[out[c] == "", c] = pd.NA
         
-         # main raw value follows selected dtype
+        # main raw value follows selected dtype
         if "raw_value" in out.columns:
             if dtype == "numeric":
                 out["raw_value"] = pd.to_numeric(out["raw_value"], errors="coerce")
@@ -98,8 +98,9 @@ def clean_unique_values(df, file_name, var_name, sheet_name,
             f"Available columns: {list(df.columns)}"
         )
 
-    # Keep only relevant cols for merging and drop duplicates to get unique combinations
+    # Keep only relevant cols for merging and drop duplicates to get unique combinations, drop any with NA in all merge cols
     df_subset = df[merge_cols].drop_duplicates().reset_index(drop=True).copy()
+    df_subset = df_subset.dropna(subset=merge_cols, how="all") # Drop any rows where variable, comment, and free text are all NA
     
     # Step 2: Merge with the cleaning worksheet to check if combination has already been added
 
