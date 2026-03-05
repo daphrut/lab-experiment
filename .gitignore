@@ -209,9 +209,6 @@ __marimo__/
 # .DS_Store
 .DS_Store
 
-# Trash folder
-z_old/
-
 # Personal configuration file
 config.py
 
