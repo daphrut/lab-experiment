@@ -115,11 +115,11 @@ def clean_unique_values(df, file_name, var_name, sheet_name,
     # Merge the unique values dataframe with the cleaning sheet dataframe
     merged_df = df_subset.merge(cleaning_df, on=merge_cols, how="left", indicator=True)
 
-    # If "_merge" == "left_only", set cleaned_value, status, and affects_vars to "", "Unchecked", and "" respectively
+    # If "_merge" == "left_only", set cleaned_value, status, and affects_vars to "", "Unchecked", and missing respectively
     merged_df.loc[merged_df["_merge"] == "left_only", "cleaned_value"] = ""
     merged_df.loc[merged_df["_merge"] == "left_only", "status"] = "Unchecked"
     if affected_vars:
-        merged_df.loc[merged_df["_merge"] == "left_only", "affects_vars"] = ""
+        merged_df.loc[merged_df["_merge"] == "left_only", "affects_vars"] = pd.NA
 
     # Step 3: If not already in cleaning sheet (i.e. _merge = "left_only"), add to the 
     # bottom of the cleaning sheet with status "Unchecked" for review
