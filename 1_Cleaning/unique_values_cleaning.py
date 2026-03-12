@@ -1,6 +1,3 @@
-### TO DO: deal with multiple variables and one sheet (e.g. _1, _2, etc.)
-
-
 # Function to clean unique values:
 #       (1) Merge with the cleaning worksheet to check if value-comment(-free text-free text comment) 
 #           combination has already been added to the cleaning worksheet
@@ -21,7 +18,8 @@ def clean_unique_values(df, file_name, var_name, sheet_name,
                         comment=False, 
                         free_text=False, 
                         mc_fc_vars=False,
-                        report=False):
+                        report=False,
+                        affected_vars=False):
     
     # Step 1: Prepare the data for merging with the cleaning sheet
 
@@ -117,9 +115,11 @@ def clean_unique_values(df, file_name, var_name, sheet_name,
     # Merge the unique values dataframe with the cleaning sheet dataframe
     merged_df = df_subset.merge(cleaning_df, on=merge_cols, how="left", indicator=True)
 
-    # If "_merge" == "left_only", set cleaned_value and status to "" and "Unchecked" respectively
+    # If "_merge" == "left_only", set cleaned_value, status, and affects_vars to "", "Unchecked", and missing respectively
     merged_df.loc[merged_df["_merge"] == "left_only", "cleaned_value"] = ""
     merged_df.loc[merged_df["_merge"] == "left_only", "status"] = "Unchecked"
+    if affected_vars:
+        merged_df.loc[merged_df["_merge"] == "left_only", "affects_vars"] = pd.NA
 
     # Step 3: If not already in cleaning sheet (i.e. _merge = "left_only"), add to the 
     # bottom of the cleaning sheet with status "Unchecked" for review
@@ -148,10 +148,13 @@ def clean_unique_values(df, file_name, var_name, sheet_name,
     # Step 4: Create clean and status variables in main dataset from cleaning sheet
 
     # Include rows just appended in Step 3 (so new combinations are available immediately)
-    lookup_parts = [cleaning_df[merge_cols + ["cleaned_value", "status"]]]
+    lookup_cols = merge_cols + ["cleaned_value", "status"]
+    if affected_vars:
+        lookup_cols.append("affects_vars")
+    lookup_parts = [cleaning_df[lookup_cols]]
     if not new_rows.empty:
         lookup_parts.append(
-            new_rows.drop(columns=["_merge"], errors="ignore")[merge_cols + ["cleaned_value", "status"]]
+            new_rows.drop(columns=["_merge"], errors="ignore")[lookup_cols]
         )
 
     lookup_df = pd.concat(lookup_parts, ignore_index=True)
@@ -165,6 +168,9 @@ def clean_unique_values(df, file_name, var_name, sheet_name,
         "cleaned_value": f"{var_name}_clean",
         "status": f"{var_name}_status",
     }
+    if affected_vars:
+        rename_out["affects_vars"] = f"{var_name}_aff_vars"
+    
     for generic_col, original_col in rename_back_dict.items():
         if generic_col in df.columns:
             rename_out[generic_col] = original_col
