@@ -209,6 +209,9 @@ __marimo__/
 # .DS_Store
 .DS_Store
 
+# Workspace
+*.code-workspace
+
 # Personal configuration file
 config.py
 
