@@ -10,6 +10,7 @@ def make_regression_table(
     outcome_levels=None,
     df_levels=None,
     decimals=3,  # int or list[int], one per model column
+    mean_decimals=0,  # int or list[int], decimal places for baseline mean row
     r2_type=None,
     col1_width="5.5cm",
     coln_width="2cm",
@@ -44,7 +45,8 @@ def make_regression_table(
     """
 
     n_models = len(fit_list)
-    decimals_list = decimals if isinstance(decimals, list) else [decimals] * n_models
+    decimals_list      = decimals       if isinstance(decimals,       list) else [decimals]       * n_models
+    mean_decimals_list = mean_decimals  if isinstance(mean_decimals,  list) else [mean_decimals]  * n_models
 
     # ---------------------------
     # Helper: extract stats
@@ -229,19 +231,19 @@ def make_regression_table(
                 val = None
             bl_means.append(val)
         mean_vals = [
-            f"{{:,.{decimals_list[i]}f}}".format(v) if (v is not None and v == v) else ""
+            f"{{:,.{mean_decimals_list[i]}f}}".format(v) if (v is not None and v == v) else ""
             for i, v in enumerate(bl_means)
         ]
         lines.append("Baseline mean & " + " & ".join(mean_vals) + r" \\")
     elif isinstance(baseline_mean, list):
         mean_vals = [
-            f"{{:,.{decimals_list[i]}f}}".format(v) if v is not None else ""
+            f"{{:,.{mean_decimals_list[i]}f}}".format(v) if v is not None else ""
             for i, v in enumerate(baseline_mean)
         ]
         lines.append("Baseline mean & " + " & ".join(mean_vals) + r" \\")
     elif isinstance(baseline_mean, dict):
         mean_vals = [
-            f"{{:,.{decimals_list[i]}f}}".format(baseline_mean[i]) if i in baseline_mean else ""
+            f"{{:,.{mean_decimals_list[i]}f}}".format(baseline_mean[i]) if i in baseline_mean else ""
             for i in range(n_models)
         ]
         lines.append("Baseline mean & " + " & ".join(mean_vals) + r" \\")
