@@ -164,9 +164,13 @@ def make_regression_table(
                 coef  = get_coef(fit, var)
                 se    = get_se(fit, var)
                 pval  = get_pval(fit, var)
-                stars = get_stars(pval)
-                coef_row.append(f"${fmt.format(coef)}\\rlap{{{stars}}}$")
-                se_row.append(f"$({fmt.format(se)})$")
+                if se == 0 or se != se:  # se is zero or NaN — unidentified
+                    coef_row.append(r"\textemdash")
+                    se_row.append("")
+                else:
+                    stars = get_stars(pval)
+                    coef_row.append(f"${fmt.format(coef)}\\rlap{{{stars}}}$")
+                    se_row.append(f"$({fmt.format(se)})$")
             except KeyError:
                 coef_row.append("")
                 se_row.append("")
