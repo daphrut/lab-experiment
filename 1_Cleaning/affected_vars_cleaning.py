@@ -1,6 +1,6 @@
 # Function to clean affected variables:
 #   (1) Auto-discover all *_aff_vars columns in the main dataset
-#   (2) Build a long dataframe: labgroupid × trigger_var × affected_var × original_value
+#   (2) Build a long dataframe: labgroupid × trigger_var × affected_var × original_value_clean
 #   (3) Append new cases (status "Unchecked") to the specified Excel sheet
 #   (4) Pull back cleaned values where value_changed == "Y" into *_clean columns
 
@@ -112,15 +112,19 @@ def clean_affected_vars(df, file_name, sheet_name, data_dict=None, id_cols=None)
         df_aff = df_aff.explode("affected_var").reset_index(drop=True)
         df_aff = df_aff.drop(columns=["Variable", "No variables"], errors="ignore")
 
-    # Step 4: Attach the current value of each affected variable
+    # Step 4: Attach the current cleaned value of each affected variable if exists
     def _extract_original_value(row):
         var = row["affected_var"]
-        if var not in df.columns:
+        clean_var = f"{var}_clean"
+
+        # Prefer the *_clean column when present so reviews/editing always target cleaned values.
+        value_col = clean_var if clean_var in df.columns else var
+        if value_col not in df.columns:
             return pd.NA
         mask = pd.Series(True, index=df.index)
         for c in id_cols:
             mask &= df[c] == row[c]
-        matches = df.loc[mask, var]
+        matches = df.loc[mask, value_col]
         if matches.empty:
             return pd.NA
         return matches.iloc[0]
@@ -198,11 +202,17 @@ def clean_affected_vars(df, file_name, sheet_name, data_dict=None, id_cols=None)
         ]
         for _, row in changed.iterrows():
             clean_col = f"{row['affected_var']}_clean"
-            if clean_col in df.columns:
-                mask = pd.Series(True, index=df.index)
-                for c in id_cols:
-                    mask &= df[c] == row[c]
-                df.loc[mask, clean_col] = row["cleaned_value"]
+            if clean_col not in df.columns:
+                src_col = row["affected_var"]
+                if src_col in df.columns:
+                    df[clean_col] = df[src_col]
+                else:
+                    df[clean_col] = pd.NA
+
+            mask = pd.Series(True, index=df.index)
+            for c in id_cols:
+                mask &= df[c] == row[c]
+            df.loc[mask, clean_col] = row["cleaned_value"]
     
     # Step 9: Print report of number of changed values
     num_changed = existing[

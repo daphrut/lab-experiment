@@ -141,14 +141,20 @@ def clean_split_types(
     # If requested, auto-fill missing type_no values for split rows.
     # Numbering is per original_key and starts at 1 in workbook row order.
     if auto_assign_type_no and "type_no" in id_cols and "type_no" in split_rows.columns:
+        # Normalize type_no and treat common missing tokens as NA so auto-assignment works
         split_rows["type_no"] = split_rows["type_no"].astype("string").str.strip()
-        split_rows.loc[split_rows["type_no"] == "", "type_no"] = pd.NA
-
-        missing_mask = split_rows["type_no"].isna()
+        # treat empty strings and common text representations of missing as NA
+        missing_tokens = {"", "nan", "none", "na", "<na>", "null"}
+        # Treat explicit NA values or common text tokens as missing
+        token_mask = split_rows["type_no"].astype("string").str.strip().str.lower().isin(missing_tokens)
+        missing_mask = split_rows["type_no"].isna() | token_mask
+        split_rows.loc[missing_mask, "type_no"] = pd.NA
         if missing_mask.any():
+            # Assign type_no sequentially within each (labgroupid, equipment, survey) group
+            group_cols = [c for c in id_cols if c != "type_no"]
             seq = (
                 split_rows.loc[missing_mask]
-                .groupby("original_key", sort=False)
+                .groupby(group_cols, sort=False)
                 .cumcount()
                 + int(split_type_start)
             )
@@ -179,17 +185,39 @@ def clean_split_types(
         for col in id_cols + clean_cols:
             if col in split_row.index and pd.notna(split_row[col]):
                 base[col] = split_row[col]
+        # Mark this row as coming from a split replacement
+        base["ind_split_type"] = 1
         new_rows.append(base)
 
     new_rows_df = pd.DataFrame(new_rows)
     keys_to_replace = set(valid_split_rows["original_key"].tolist())
     out_keys = out.apply(lambda r: _row_key(r, id_cols), axis=1)
     out_remaining = out.loc[~out_keys.isin(keys_to_replace)].copy()
+    # Ensure non-split rows have ind_split_type==0
+    if "ind_split_type" not in out_remaining.columns:
+        out_remaining["ind_split_type"] = 0
+    else:
+        out_remaining["ind_split_type"] = out_remaining["ind_split_type"].fillna(0).astype(int)
 
-    combined = pd.concat([out_remaining, new_rows_df[out.columns]], ignore_index=True)
+    # Ensure new_rows_df contains all original output columns (fill missing with NaN)
+    for c in out.columns:
+        if c not in new_rows_df.columns:
+            new_rows_df[c] = pd.NA
+
+    combined = pd.concat([out_remaining, new_rows_df[out.columns.tolist() + [c for c in new_rows_df.columns if c not in out.columns]]], ignore_index=True)
     print(
         f"Replaced {len(keys_to_replace)} original row(s) with {len(new_rows_df)} split row(s)."
     )
+
+    # Summary: distribution of number of split-types created per original row
+    per_orig_counts = valid_split_rows.groupby("original_key").size()
+    dist = per_orig_counts.value_counts().sort_index()
+    print("Split-types created per original row (split_count -> num_originals):")
+    for split_count, num_originals in dist.items():
+        print(f"  {split_count} -> {num_originals}")
+
+    # Also print how many original rows were replaced
+    print(f"Total original rows replaced: {len(keys_to_replace)}")
 
     return combined
 
@@ -221,3 +249,5 @@ def reassign_type_no(
 
     out = out.drop(columns=["_type_sort"])
     return out
+
+
