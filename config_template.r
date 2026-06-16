@@ -77,8 +77,8 @@ SENSITIVE_DATA <- file.path(DATA_ROOT, "18_Sensitive_Data")
 OUTPUT <- file.path(OVERLEAF_ROOT, "2_Output")
 
 # Set secret seed (for creating IDs)
-SEED <- ###
+SEED <- NULL
 
 # FC confidential data
-ELEC_PER_M3 <- ###
-GAS_PER_M3  <- ###
+ELEC_PER_M3 <- NULL
+GAS_PER_M3  <- NULL

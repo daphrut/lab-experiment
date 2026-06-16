@@ -218,3 +218,6 @@ config.r
 
 # Internal notes on data cleaning
 1_Cleaning/data_cleaning_notes.docx
+
+# HTML files
+*.html
