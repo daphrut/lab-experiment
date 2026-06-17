@@ -56,6 +56,9 @@ make_histogram <- function(
   group_labels = NULL,
   show_median = FALSE,
   x_label = NULL,
+  x_limits = NULL,
+  x_breaks = NULL,
+  median_digits = 0,
   font_family = "",
   output_dir = "."
 ) {
@@ -138,7 +141,7 @@ make_histogram <- function(
         geom_vline(xintercept = med, colour = palette[1],
                    linetype = "dashed", linewidth = 0.6) +
         annotate("text", x = med, y = Inf,
-                 label = paste0("Median = ", format(round(med), scientific = FALSE)),
+                 label = paste0("Median = ", format(round(med, median_digits), scientific = FALSE, nsmall = median_digits)),
                  colour = palette[1], hjust = -0.1, vjust = 1.5,
                  size = 3, family = font_family)
     } else {
@@ -156,7 +159,7 @@ make_histogram <- function(
                      linetype = "dashed", linewidth = 0.6) +
           annotate("text", x = med_val, y = Inf,
                    label = paste0(group_levels[i], " median = ",
-                                  format(round(med_val), scientific = FALSE)),
+                                  format(round(med_val, median_digits), scientific = FALSE, nsmall = median_digits)),
                    colour = palette[i], hjust = -0.1,
                    vjust = 1.5 + (i - 1) * 1.8,
                    size = 3, family = font_family)
@@ -172,7 +175,7 @@ make_histogram <- function(
       x = x_label,
       y = "Percent"
     ) +
-    scale_x_continuous(labels = comma) +
+    scale_x_continuous(labels = comma, breaks = x_breaks) +
     theme_minimal(base_family = font_family) +
     theme(
       legend.position    = if (!is.null(group_var)) "top" else "none",
@@ -183,6 +186,10 @@ make_histogram <- function(
       panel.grid.minor   = element_blank(),
       panel.grid.major.y = element_line(colour = "grey85", linewidth = 0.3)
     )
+
+  if (!is.null(x_limits)) {
+    p <- p + coord_cartesian(xlim = x_limits)
+  }
 
   # ----------------------------------------
   # Save to PDF
