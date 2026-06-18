@@ -212,8 +212,12 @@ __marimo__/
 # Workspace
 *.code-workspace
 
-# Personal configuration file
+# Personal configuration files
 config.py
+config.r
 
 # Internal notes on data cleaning
 1_Cleaning/data_cleaning_notes.docx
+
+# HTML files
+*.html

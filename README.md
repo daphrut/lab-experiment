@@ -22,6 +22,7 @@ The repository covers the full research pipeline: power calculations, randomizat
 ├── .gitignore
 ├── LICENSE
 └── README.md
+└── config_template.py
 ```
 
 Scripts within each folder are numbered sequentially (e.g. `1_1_`, `1_2_`).

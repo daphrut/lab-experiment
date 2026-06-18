@@ -1,0 +1,209 @@
+---
+title: "Electricity Consumption Histograms"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.show = "show")
+```
+
+```{r config-and-libraries, include=FALSE}
+library(here)
+library(dplyr)
+
+# Load config and functions
+source(here("config.R"))
+source(here("3_Analysis", "functions", "histogram_cont_var_func.r"))
+
+# Output directory
+hist_dir <- file.path(OUTPUT, "6_Histograms")
+dir.create(hist_dir, showWarnings = FALSE, recursive = TRUE)
+```
+
+```{r load-data}
+df <- read.csv(file.path(CLEAN_DATA, "final_dataset.csv"))
+```
+
+```{r create-vars}
+# Create MNF variable
+df <- df %>% mutate(MNF = ifelse(faculty == "Faculty of Science (MNF)", 1, 0))
+```
+
+```{r separate-bl-el}
+# Restrict df to only those labgroupids with BL and EL data
+df_sample <- df %>%
+  group_by(labgroupid) %>%
+  filter(n() == 2) %>%
+  ungroup()
+
+# Separate BL and EL
+df_bl_all <- df %>% filter(survey == "BL")
+df_bl_sample <- df_sample %>% filter(survey == "BL")
+df_el <- df %>% filter(survey == "EL")
+```
+
+# Overall Distribution
+
+```{r overall-bl}
+# BL overall - all groups
+make_histogram(
+  df       = df_bl_all,
+  variable = "annual_electricity_total",
+  x_label  = "Annual Electricity Consumption (kWh)",
+  output_file = "hist_electricity_bl_overall.pdf",
+  binwidth     = 10000,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
+
+```{r overall-bl-sample}
+# BL overall - sample with BL and EL data
+make_histogram(
+  df       = df_bl_sample,
+  variable = "annual_electricity_total",
+  x_label  = "Annual Electricity Consumption (kWh)",
+  output_file = "hist_electricity_bl_overall_sample.pdf",
+  binwidth     = 10000,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
+
+```{r overall-el}
+# EL overall
+make_histogram(
+  df       = df_el,
+  variable = "annual_electricity_total",
+  x_label  = "Annual Electricity Consumption (kWh)",
+  output_file = "hist_electricity_el_overall.pdf",
+  binwidth     = 10000,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
+
+
+# By Treatment Status
+
+```{r treatment-bl}
+# BL by treatment - all groups
+make_histogram(
+  df           = df_bl_all,
+  variable     = "annual_electricity_total",
+  group_var    = "treated",
+  group_labels = list("0" = "Control", "1" = "Treatment"),
+  x_label      = "Annual Electricity Consumption (kWh)",
+  output_file  = "hist_electricity_bl_by_treatment.pdf",
+  binwidth     = 10000,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
+
+```{r treatment-bl-sample}
+# BL by treatment - sample with BL and EL data
+make_histogram(
+  df           = df_bl_sample,
+  variable     = "annual_electricity_total",
+  group_var    = "treated",
+  group_labels = list("0" = "Control", "1" = "Treatment"),
+  x_label      = "Annual Electricity Consumption (kWh)",
+  output_file  = "hist_electricity_bl_by_treatment_sample.pdf",
+  binwidth     = 10000,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
+
+```{r treatment-el}
+# EL by treatment
+make_histogram(
+  df           = df_el,
+  variable     = "annual_electricity_total",
+  group_var    = "treated",
+  group_labels = list("0" = "Control", "1" = "Treatment"),
+  x_label      = "Annual Electricity Consumption (kWh)",
+  output_file  = "hist_electricity_el_by_treatment.pdf",
+  binwidth     = 10000,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
+
+# By Faculty
+
+```{r faculty-bl}
+# BL by faculty - all groups
+make_histogram(
+  df          = df_bl_all,
+  variable    = "annual_electricity_total",
+  group_var   = "MNF",
+  group_labels = list("0" = "Medicine or Joint", "1" = "Science"),
+  x_label     = "Annual Electricity Consumption (kWh)",
+  output_file = "hist_electricity_bl_by_faculty.pdf",
+  binwidth     = 10000,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
+
+```{r faculty-bl-sample}
+# BL by faculty - sample with BL and EL data
+make_histogram(
+  df          = df_bl_sample,
+  variable    = "annual_electricity_total",
+  group_var   = "MNF",
+  group_labels = list("0" = "Medicine or Joint", "1" = "Science"),
+  x_label     = "Annual Electricity Consumption (kWh)",
+  output_file = "hist_electricity_bl_by_faculty_sample.pdf",
+  binwidth     = 10000,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
+
+```{r faculty-el}
+# EL by faculty
+make_histogram(
+  df          = df_el,
+  variable    = "annual_electricity_total",
+  group_var   = "MNF",
+  group_labels = list("0" = "Medicine or Joint", "1" = "Science"),
+  x_label     = "Annual Electricity Consumption (kWh)",
+  output_file = "hist_electricity_el_by_faculty.pdf",
+  binwidth     = 10000,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
+
+
+# BL vs EL Comparison
+
+```{r bl-vs-el}
+# BL vs EL comparison - sample with BL and EL data
+make_histogram(
+  df          = df_sample,
+  variable    = "annual_electricity_total",
+  group_var   = "survey",
+  x_label     = "Annual Electricity Consumption (kWh)",
+  output_file = "hist_electricity_bl_vs_el.pdf",
+  binwidth     = 10000,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
