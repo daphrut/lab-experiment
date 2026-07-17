@@ -7,6 +7,7 @@ def make_regression_table(
     col_groups=None,
     col_subgroups=None,
     baseline_mean=None,
+    baseline_mean_label="Baseline mean",
     outcome_levels=None,
     df_levels=None,
     decimals=3,  # int or list[int], one per model column
@@ -34,6 +35,9 @@ def make_regression_table(
                       e.g. {"Levels": [0,2], "Log": [1,3]}
     baseline_mean   : optional. Pass "auto" to compute from df_levels,
                       or a dict {col_index: value}, or None to omit
+    baseline_mean_label : row label used for the baseline_mean row (default
+                      "Baseline mean"; e.g. pass "Control mean" when the row
+                      reports a control-group mean rather than a pre-period one)
     outcome_levels  : string, outcome column name (used if baseline_mean="auto")
     df_levels       : dataframe (used if baseline_mean="auto")
     decimals        : int, decimal places for coefficients (default 3)
@@ -56,6 +60,16 @@ def make_regression_table(
         elif pval < 0.05: return "**"
         elif pval < 0.10: return "*"
         else:             return ""
+
+    def fmt_val(val, d):
+        # Negative sign hangs left via \llap (zero width); positive values get a
+        # leading space in its place, so decimal points stay aligned down the column.
+        # "," -> "{,}" since a bare comma in math mode gets extra spacing.
+        if val != val:  # NaN
+            return ""
+        magnitude = f"{{:,.{d}f}}".format(abs(val)).replace(",", "{,}")
+        sign = r"\llap{-}" if val < 0 else " "
+        return f"{sign}{magnitude}"
 
     def checkmark_or_dash(val):
         return r"\checkmark" if val else r"\textemdash"
@@ -159,7 +173,7 @@ def make_regression_table(
         coef_row = []
         se_row   = []
         for i, fit in enumerate(fit_list):
-            fmt = f"{{:.{decimals_list[i]}f}}"
+            d = decimals_list[i]
             try:
                 coef  = get_coef(fit, var)
                 se    = get_se(fit, var)
@@ -169,8 +183,8 @@ def make_regression_table(
                     se_row.append("")
                 else:
                     stars = get_stars(pval)
-                    coef_row.append(f"${fmt.format(coef)}\\rlap{{{stars}}}$")
-                    se_row.append(f"$({fmt.format(se)})$")
+                    coef_row.append(f"${fmt_val(coef, d)}\\rlap{{{stars}}}$")
+                    se_row.append(f"(${fmt_val(se, d)}$)")
             except KeyError:
                 coef_row.append("")
                 se_row.append("")
@@ -188,14 +202,14 @@ def make_regression_table(
 
     # Observations
     obs_row = "Number of observations & " + " & ".join(
-        [f"{get_nobs(fit):,}" for fit in fit_list]
+        [f"${fmt_val(get_nobs(fit), 0)}$" for fit in fit_list]
     ) + r" \\"
     lines.append(obs_row)
 
     # R² rows
     if r2_type == "within":
         r2_row = "R$^2$ Within & " + " & ".join(
-            [f"{get_r2_within(fit):.{decimals_list[i]}f}"
+            [f"${fmt_val(get_r2_within(fit), decimals_list[i])}$"
              if get_r2_within(fit) is not None else ""
              for i, fit in enumerate(fit_list)]
         ) + r" \\"
@@ -203,18 +217,18 @@ def make_regression_table(
 
     elif r2_type == "adjr2":
         r2_row = "Adjusted R$^2$ & " + " & ".join(
-            [f"{get_r2_adj(fit):.{decimals_list[i]}f}" for i, fit in enumerate(fit_list)]
+            [f"${fmt_val(get_r2_adj(fit), decimals_list[i])}$" for i, fit in enumerate(fit_list)]
         ) + r" \\"
         lines.append(r2_row)
 
     elif r2_type == "both":
         r2_within_row = "R$^2$ Within & " + " & ".join(
-            [f"{get_r2_within(fit):.{decimals_list[i]}f}"
+            [f"${fmt_val(get_r2_within(fit), decimals_list[i])}$"
              if get_r2_within(fit) is not None else ""
              for i, fit in enumerate(fit_list)]
         ) + r" \\"
         r2_adj_row = "Adjusted R$^2$ & " + " & ".join(
-            [f"{get_r2_adj(fit):.{decimals_list[i]}f}" for i, fit in enumerate(fit_list)]
+            [f"${fmt_val(get_r2_adj(fit), decimals_list[i])}$" for i, fit in enumerate(fit_list)]
         ) + r" \\"
         lines.append(r2_within_row)
         lines.append(r2_adj_row)
@@ -235,22 +249,22 @@ def make_regression_table(
                 val = None
             bl_means.append(val)
         mean_vals = [
-            f"{{:,.{mean_decimals_list[i]}f}}".format(v) if (v is not None and v == v) else ""
+            f"${fmt_val(v, mean_decimals_list[i])}$" if (v is not None and v == v) else ""
             for i, v in enumerate(bl_means)
         ]
-        lines.append("Baseline mean & " + " & ".join(mean_vals) + r" \\")
+        lines.append(f"{baseline_mean_label} & " + " & ".join(mean_vals) + r" \\")
     elif isinstance(baseline_mean, list):
         mean_vals = [
-            f"{{:,.{mean_decimals_list[i]}f}}".format(v) if v is not None else ""
+            f"${fmt_val(v, mean_decimals_list[i])}$" if v is not None else ""
             for i, v in enumerate(baseline_mean)
         ]
-        lines.append("Baseline mean & " + " & ".join(mean_vals) + r" \\")
+        lines.append(f"{baseline_mean_label} & " + " & ".join(mean_vals) + r" \\")
     elif isinstance(baseline_mean, dict):
         mean_vals = [
-            f"{{:,.{mean_decimals_list[i]}f}}".format(baseline_mean[i]) if i in baseline_mean else ""
+            f"${fmt_val(baseline_mean[i], mean_decimals_list[i])}$" if i in baseline_mean else ""
             for i in range(n_models)
         ]
-        lines.append("Baseline mean & " + " & ".join(mean_vals) + r" \\")
+        lines.append(f"{baseline_mean_label} & " + " & ".join(mean_vals) + r" \\")
 
     lines.append(r"\addlinespace[0.2cm]")
 
