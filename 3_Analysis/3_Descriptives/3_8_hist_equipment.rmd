@@ -17,6 +17,7 @@ library(dplyr)
 # Load config and functions
 source(here("config.R"))
 source(here("3_Analysis", "functions", "histogram_cont_var_func.r"))
+source(here("3_Analysis", "functions", "barchart_cat_var_func.r"))
 
 # Output directory
 hist_dir <- file.path(OUTPUT, "6_Histograms")
@@ -39,7 +40,8 @@ df_bl <- df_sample %>% filter(survey == "BL")
 matched_labgroupids <- unique(df_bl$labgroupid)
 
 # Restrict the equipment panel to the same matched sample and to BL
-panel_bl <- panel %>% filter(survey == "BL", labgroupid %in% matched_labgroupids)
+panel_bl <- panel %>% 
+  filter(survey == "BL", labgroupid %in% matched_labgroupids)
 ```
 
 # Equipment Counts
@@ -70,80 +72,107 @@ equip_counts <- panel_bl %>%
 df_equip <- df_bl %>% select(labgroupid, treated)
 for (eq in names(equipment_labels)) {
   colname <- paste0("count_", eq)
-  eq_sub <- equip_counts %>% filter(equipment == eq) %>% select(labgroupid, !!colname := count)
+  eq_sub <- equip_counts %>% 
+    filter(equipment == eq) %>% 
+    select(labgroupid, !!colname := count)
   df_equip <- df_equip %>% left_join(eq_sub, by = "labgroupid")
   df_equip[[colname]][is.na(df_equip[[colname]])] <- 0
 }
 ```
 
 ```{r equipment-counts-plots, results = "asis"}
-# Looped since all 11 equipment types share identical plotting logic;
-# results = "asis" lets each iteration emit its own markdown subheader
+# Looped since all 11 equipment types have identical plotting;
+# results = "asis" lets each iteration emit its own markdown subheader.
+# Restricted to labs with at least 1 unit of the given equipment type.
+
+saved_plots <- list()
 for (eq in names(equipment_labels)) {
   colname <- paste0("count_", eq)
   label <- equipment_labels[[eq]]
 
   cat(paste0("\n\n## ", label, "\n\n"))
 
+  df_equip_sub <- df_equip %>% filter(.data[[colname]] > 0)
+
   p_overall <- make_histogram(
-    df          = df_equip,
+    df          = df_equip_sub,
     variable    = colname,
     output_file = paste0("hist_", colname, "_overall.pdf"),
     binwidth    = 1,
     boundary    = 0,
-    show_median = TRUE,
-    output_dir  = hist_dir
+    show_median = FALSE,
+    x_limits    = c(0, NA),
+    output_dir  = hist_dir,
+    save        = FALSE
   )
   print(p_overall)
+  saved_plots[[length(saved_plots) + 1]] <- 
+    list(plot = p_overall, file = paste0("hist_", colname, "_overall.pdf"))
 
   p_treatment <- make_histogram(
-    df           = df_equip,
+    df           = df_equip_sub,
     variable     = colname,
     group_var    = "treated",
     group_labels = list("0" = "Control", "1" = "Treatment"),
     output_file  = paste0("hist_", colname, "_by_treatment.pdf"),
     binwidth     = 1,
     boundary     = 0,
-    show_median  = TRUE,
-    output_dir   = hist_dir
+    show_median  = FALSE,
+    x_limits     = c(0, NA),
+    output_dir   = hist_dir,
+    save         = FALSE
   )
   print(p_treatment)
+  saved_plots[[length(saved_plots) + 1]] <- 
+    list(
+      plot = p_treatment, 
+      file = paste0("hist_", colname, "_by_treatment.pdf")
+    )
+}
+```
+
+```{r equipment-counts-save, include=FALSE}
+for (sp in saved_plots) {
+  ggplot2::ggsave(
+    file.path(hist_dir, sp$file), 
+    plot = sp$plot, width = 6, height = 4, device = "pdf"
+  )
 }
 ```
 
 # ULT Freezer Temperature
 
 ```{r ult-temp-prep}
-# Per-unit (not per-lab) continuous variable: one row per ULT freezer
+# Per-unit (not per-lab) variable: one row per ULT freezer. Only a handful of
+# distinct set-temperatures occur in practice, so treat it as categorical
+# rather than continuous.
 ult_temp <- panel_bl %>%
   filter(equipment == "ult") %>%
   mutate(temp_ult = as.numeric(temp_ult)) %>%
   filter(!is.na(temp_ult)) %>%
   left_join(df_bl %>% select(labgroupid, treated), by = "labgroupid")
+
+temp_ult_order <- sort(unique(ult_temp$temp_ult))
 ```
 
 ```{r ult-temp-overall}
-make_histogram(
-  df          = ult_temp,
-  variable    = "temp_ult",
-  output_file = "hist_temp_ult_overall.pdf",
-  binwidth    = 1,
-  boundary    = 0,
-  show_median = TRUE,
-  output_dir  = hist_dir
+make_barchart(
+  df             = ult_temp,
+  variable       = "temp_ult",
+  category_order = temp_ult_order,
+  output_file    = "bar_temp_ult_overall.pdf",
+  output_dir     = hist_dir
 )
 ```
 
 ```{r ult-temp-by-treatment}
-make_histogram(
-  df           = ult_temp,
-  variable     = "temp_ult",
-  group_var    = "treated",
-  group_labels = list("0" = "Control", "1" = "Treatment"),
-  output_file  = "hist_temp_ult_by_treatment.pdf",
-  binwidth     = 1,
-  boundary     = 0,
-  show_median  = TRUE,
-  output_dir   = hist_dir
+make_barchart(
+  df             = ult_temp,
+  variable       = "temp_ult",
+  group_var      = "treated",
+  group_labels   = list("0" = "Control", "1" = "Treatment"),
+  category_order = temp_ult_order,
+  output_file    = "bar_temp_ult_by_treatment.pdf",
+  output_dir     = hist_dir
 )
 ```

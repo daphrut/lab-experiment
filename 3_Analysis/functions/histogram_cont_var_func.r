@@ -59,7 +59,8 @@ make_histogram <- function(
   x_breaks = NULL,
   median_digits = 0,
   font_family = "",
-  output_dir = "."
+  output_dir = ".",
+  save = TRUE
 ) {
 
   # ----------------------------------------
@@ -177,7 +178,7 @@ make_histogram <- function(
     scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
     theme_minimal(base_family = font_family, base_size = 14) +
     theme(
-      legend.position    = if (!is.null(group_var)) "top" else "none",
+      legend.position    = if (!is.null(group_var)) "bottom" else "none",
       legend.text        = element_text(size = 13),
       axis.title.x       = element_blank(),
       axis.title.y       = element_text(size = 14),
@@ -197,7 +198,14 @@ make_histogram <- function(
   # ----------------------------------------
   # Save to PDF
   # ----------------------------------------
-  ggsave(output_path, plot = p, width = 6, height = 4, device = "pdf")
+  # Skippable: opening/closing the ggsave device mid-loop disrupts plot
+  # ordering when this function is called repeatedly inside a results="asis"
+  # loop that also cat()s text (e.g. section headers) between plots. Callers
+  # doing that should pass save = FALSE and ggsave() the returned plot
+  # themselves outside the asis loop.
+  if (save) {
+    ggsave(output_path, plot = p, width = 6, height = 4, device = "pdf")
+  }
 
   p
 }

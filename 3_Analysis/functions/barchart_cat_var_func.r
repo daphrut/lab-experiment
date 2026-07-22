@@ -143,7 +143,7 @@ make_barchart <- function(
     scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.12))) +
     theme_minimal(base_family = font_family, base_size = 14) +
     theme(
-      legend.position    = if (!is.null(group_var)) "top" else "none",
+      legend.position    = if (!is.null(group_var)) "bottom" else "none",
       legend.text        = element_text(size = 13),
       axis.title.x       = element_blank(),
       axis.title.y       = element_text(size = 14),
