@@ -52,13 +52,13 @@ checklist_cols_el <- c(
 
 # Keep only groups where answered at least 1 checklist q
 # Then fill remaining NAs in the checklist cols with "Not applicable"
-df_checklist_bl <- df_sample %>%
+df_checklist_bl <- df_treatment %>%
   filter(rowSums(!is.na(select(., all_of(checklist_cols_bl)))) > 0) %>%
   mutate(
     across(all_of(checklist_cols_bl), ~ ifelse(is.na(.), "Not applicable", .))
   )
 
-df_checklist_el <- df_sample %>%
+df_checklist_el <- df_treatment %>%
   filter(rowSums(!is.na(select(., all_of(checklist_cols_el)))) > 0) %>%
   mutate(
     across(all_of(checklist_cols_el), ~ ifelse(is.na(.), "Not applicable", .))
