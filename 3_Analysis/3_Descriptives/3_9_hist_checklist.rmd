@@ -1,0 +1,179 @@
+---
+title: "Checklist Question Histograms"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.show = "show")
+```
+
+```{r config-and-libraries, include=FALSE}
+library(here)
+library(dplyr)
+
+# Load config and functions
+source(here("config.R"))
+source(here("3_Analysis", "functions", "stacked_bar_likert_func.r"))
+
+# Output directory
+hist_dir <- file.path(OUTPUT, "6_Histograms")
+dir.create(hist_dir, showWarnings = FALSE, recursive = TRUE)
+```
+
+```{r load-data}
+df <- read.csv(file.path(CLEAN_DATA, "final_dataset.csv"))
+```
+
+```{r restrict-sample}
+# Keep only labgroupids with both BL and EL data, then keep the BL row
+# Keep only treated groups (did checklist)
+df_sample <- df %>%
+  group_by(labgroupid) %>%
+  filter(n() == 2) %>%
+  ungroup()
+
+df_bl <- df_sample %>% filter(survey == "BL")
+df_treatment <- df_bl %>% filter(treated == 1)
+
+# BL and EL checklist cols
+checklist_cols_bl <- c(
+  paste0("bronze_q_", 1:16, "_bl"),
+  paste0("silver_q_", 1:18, "_bl"),
+  paste0("gold_q_", 1:15, "_bl")
+)
+checklist_cols_el <- c(
+  paste0("bronze_q_", 1:16, "_el"),
+  paste0("silver_q_", 1:18, "_el"),
+  paste0("gold_q_", 1:15, "_el")
+)
+
+# Keep only groups where answered at least 1 checklist q
+# Then fill remaining NAs in the checklist cols with "Not applicable"
+df_checklist_bl <- df_treatment %>%
+  filter(rowSums(!is.na(select(., all_of(checklist_cols_bl)))) > 0) %>%
+  mutate(
+    across(all_of(checklist_cols_bl), ~ ifelse(is.na(.), "Not applicable", .))
+  )
+
+df_checklist_el <- df_treatment %>%
+  filter(rowSums(!is.na(select(., all_of(checklist_cols_el)))) > 0) %>%
+  mutate(
+    across(all_of(checklist_cols_el), ~ ifelse(is.na(.), "Not applicable", .))
+  )
+```
+
+```{r checklist-setup, include=FALSE}
+response_order <- c( "Yes", "I don't know", "No", "Not applicable")
+
+# Questions
+bl_checklist_items <- list(
+  bronze = list(n = 16, cols = paste0("bronze_q_", 1:16, "_bl")),
+  silver = list(n = 18, cols = paste0("silver_q_", 1:18, "_bl")),
+  gold   = list(n = 15, cols = paste0("gold_q_", 1:15, "_bl"))
+)
+
+el_checklist_items <- list(
+  bronze = list(n = 16, cols = paste0("bronze_q_", 1:16, "_el")),
+  silver = list(n = 18, cols = paste0("silver_q_", 1:18, "_el")),
+  gold   = list(n = 15, cols = paste0("gold_q_", 1:15, "_el"))
+)
+```
+
+# Bronze Checklist
+
+```{r bl-bronze-checklist}
+# Bronze checklist questions at BL
+bronze_cols   <- bl_checklist_items$bronze$cols
+bronze_labels <- setNames(paste0("Bronze Q", 1:16), bronze_cols)
+
+make_stacked_bar(
+  df             = df_checklist_bl,
+  item_cols      = bronze_cols,
+  item_labels    = bronze_labels,
+  response_order = response_order,
+  output_file    = "stacked_bronze_checklist_bl.pdf",
+  output_dir     = hist_dir
+)
+```
+
+```{r el-bronze-checklist}
+# Bronze checklist questions at EL
+bronze_cols   <- el_checklist_items$bronze$cols
+bronze_labels <- setNames(paste0("Bronze Q", 1:16), bronze_cols)
+
+make_stacked_bar(
+  df             = df_checklist_el,
+  item_cols      = bronze_cols,
+  item_labels    = bronze_labels,
+  response_order = response_order,
+  output_file    = "stacked_bronze_checklist_el.pdf",
+  output_dir     = hist_dir
+)
+```
+
+# Silver Checklist
+
+```{r bl-silver-checklist}
+# Silver checklist questions at BL
+silver_cols   <- bl_checklist_items$silver$cols
+silver_labels <- setNames(paste0("Silver Q", 1:18), silver_cols)
+
+make_stacked_bar(
+  df             = df_checklist_bl,
+  item_cols      = silver_cols,
+  item_labels    = silver_labels,
+  response_order = response_order,
+  output_file    = "stacked_silver_checklist_bl.pdf",
+  output_dir     = hist_dir
+)
+```
+
+```{r el-silver-checklist}
+# Silver checklist questions at EL
+silver_cols   <- el_checklist_items$silver$cols
+silver_labels <- setNames(paste0("Silver Q", 1:18), silver_cols)
+
+make_stacked_bar(
+  df             = df_checklist_el,
+  item_cols      = silver_cols,
+  item_labels    = silver_labels,
+  response_order = response_order,
+  output_file    = "stacked_silver_checklist_el.pdf",
+  output_dir     = hist_dir
+)
+```
+
+# Gold Checklist
+
+```{r bl-gold-checklist}
+# Gold checklist questions at BL
+gold_cols   <- bl_checklist_items$gold$cols
+gold_labels <- setNames(paste0("Gold Q", 1:15), gold_cols)
+
+make_stacked_bar(
+  df             = df_checklist_bl,
+  item_cols      = gold_cols,
+  item_labels    = gold_labels,
+  response_order = response_order,
+  output_file    = "stacked_gold_checklist_bl.pdf",
+  output_dir     = hist_dir
+)
+```
+
+```{r el-gold-checklist}
+# Gold checklist questions at EL
+gold_cols   <- el_checklist_items$gold$cols
+gold_labels <- setNames(paste0("Gold Q", 1:15), gold_cols)
+
+make_stacked_bar(
+  df             = df_checklist_el,
+  item_cols      = gold_cols,
+  item_labels    = gold_labels,
+  response_order = response_order,
+  output_file    = "stacked_gold_checklist_el.pdf",
+  output_dir     = hist_dir
+)
+```

@@ -1,0 +1,308 @@
+---
+title: "Baseline Lab Characteristics Histograms"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.show = "show")
+```
+
+```{r config-and-libraries, include=FALSE}
+library(here)
+library(dplyr)
+
+# Load config and functions
+source(here("config.R"))
+source(here("3_Analysis", "functions", "histogram_cont_var_func.r"))
+source(here("3_Analysis", "functions", "barchart_cat_var_func.r"))
+source(here("3_Analysis", "functions", "barchart_multi_indicator_func.r"))
+
+# Output directory
+hist_dir <- file.path(OUTPUT, "6_Histograms")
+dir.create(hist_dir, showWarnings = FALSE, recursive = TRUE)
+```
+
+```{r load-data}
+df <- read.csv(file.path(CLEAN_DATA, "final_dataset.csv"))
+```
+
+```{r create-vars}
+# Sharing equipment and space indicators
+for (var in c("share_equip", "share_space")) {
+  df[[var]] <- ifelse(df[[paste0(var, "_ind")]] == "Yes", 1, 0)
+}
+
+# Specialized equipment indicators (fix 4c room column name)
+spec_equip_source_cols <- c(
+  pcr              = "pcr_ind",
+  ice              = "ice_ind",
+  centrifuge       = "centrifuge_ind",
+  coffee           = "coffee_ind",
+  microwave        = "microwave_ind",
+  animal           = "animal_ind",
+  nonco2_incubator = "nonco2_incubator_ind",
+  c4_room          = "X4c_room_ind",
+  minus_20c_room   = "minus_20c_room_ind",
+  other            = "other_ind"
+)
+for (var in names(spec_equip_source_cols)) {
+  df[[paste0(var, "_indicator")]] <- 
+  ifelse(df[[spec_equip_source_cols[[var]]]] == "Yes", 1, 0)
+}
+
+# Any specialized equipment indicator
+indicator_cols <- paste0(names(spec_equip_source_cols), "_indicator")
+df$any_spec_indicator <- 
+  as.integer(rowSums(df[indicator_cols] == 1, na.rm = TRUE) > 0)
+```
+
+```{r restrict-sample}
+# Keep only labgroupids with both BL and EL data, then keep the BL row
+df_sample <- df %>%
+  group_by(labgroupid) %>%
+  filter(n() == 2) %>%
+  ungroup()
+
+df_bl <- df_sample %>% 
+  filter(survey == "BL")
+```
+
+# Number of Researchers
+
+```{r no-researchers-overall}
+make_histogram(
+  df          = df_bl,
+  variable    = "no_researchers",
+  output_file = "hist_no_researchers_overall.pdf",
+  binwidth    = 2,
+  boundary    = 0,
+  show_median = TRUE,
+  output_dir  = hist_dir
+)
+```
+
+```{r no-researchers-by-treatment}
+make_histogram(
+  df           = df_bl,
+  variable     = "no_researchers",
+  group_var    = "treated",
+  group_labels = list("0" = "Control", "1" = "Treatment"),
+  output_file  = "hist_no_researchers_by_treatment.pdf",
+  binwidth     = 2,
+  boundary     = 0,
+  show_median  = TRUE,
+  output_dir   = hist_dir
+)
+```
+
+# Number of Full-Time Researchers
+
+```{r no-ft-overall}
+make_histogram(
+  df          = df_bl,
+  variable    = "no_ft",
+  output_file = "hist_no_ft_overall.pdf",
+  binwidth    = 2,
+  boundary    = 0,
+  show_median = TRUE,
+  median_digits = 1,
+  output_dir  = hist_dir
+)
+```
+
+```{r no-ft-by-treatment}
+make_histogram(
+  df           = df_bl,
+  variable     = "no_ft",
+  group_var    = "treated",
+  group_labels = list("0" = "Control", "1" = "Treatment"),
+  output_file  = "hist_no_ft_by_treatment.pdf",
+  binwidth     = 2,
+  boundary     = 0,
+  show_median  = TRUE,
+  median_digits = 1,
+  output_dir   = hist_dir
+)
+```
+
+# Faculty
+
+```{r faculty-category-order, include=FALSE}
+faculty_order  <- c(
+  "Faculty of Science (MNF)", "Faculty of Medicine (MeF)", "Both MNF and MeF"
+)
+faculty_labels <- list(
+  "Faculty of Science (MNF)"  = "Science",
+  "Faculty of Medicine (MeF)" = "Medicine",
+  "Both MNF and MeF"          = "Joint"
+)
+```
+
+```{r faculty-overall}
+make_barchart(
+  df              = df_bl,
+  variable        = "faculty",
+  category_order  = faculty_order,
+  category_labels = faculty_labels,
+  output_file     = "bar_faculty_overall.pdf",
+  output_dir      = hist_dir
+)
+```
+
+```{r faculty-by-treatment}
+make_barchart(
+  df              = df_bl,
+  variable        = "faculty",
+  group_var       = "treated",
+  group_labels    = list("0" = "Control", "1" = "Treatment"),
+  category_order  = faculty_order,
+  category_labels = faculty_labels,
+  output_file     = "bar_faculty_by_treatment.pdf",
+  output_dir      = hist_dir
+)
+```
+
+# Sharing Equipment and Space
+
+```{r share-labels, include=FALSE}
+share_labels <- c(share_equip = "Share Equipment", share_space = "Share Space")
+```
+
+```{r share-overall}
+make_indicator_barchart(
+  df          = df_bl,
+  item_cols   = names(share_labels),
+  item_labels = share_labels,
+  output_file = "bar_share_overall.pdf",
+  output_dir  = hist_dir
+)
+```
+
+```{r share-by-treatment}
+make_indicator_barchart(
+  df           = df_bl,
+  item_cols    = names(share_labels),
+  item_labels  = share_labels,
+  group_var    = "treated",
+  group_labels = list("0" = "Control", "1" = "Treatment"),
+  output_file  = "bar_share_by_treatment.pdf",
+  output_dir   = hist_dir
+)
+```
+
+# Waste
+
+```{r waste-category-order, include=FALSE}
+waste_order <- 
+  c("None", "0-3kg", "3-6kg", "6-10kg", "10-12kg", "> 12kg", "Unknown")
+```
+
+```{r waste-recycle-overall}
+make_barchart(
+  df             = df_bl,
+  variable       = "waste_recycle",
+  category_order = waste_order,
+  output_file    = "bar_waste_recycle_overall.pdf",
+  output_dir     = hist_dir
+)
+```
+
+```{r waste-recycle-by-treatment}
+make_barchart(
+  df             = df_bl,
+  variable       = "waste_recycle",
+  group_var      = "treated",
+  group_labels   = list("0" = "Control", "1" = "Treatment"),
+  category_order = waste_order,
+  output_file    = "bar_waste_recycle_by_treatment.pdf",
+  output_dir     = hist_dir
+)
+```
+
+```{r waste-clinical-overall}
+make_barchart(
+  df             = df_bl,
+  variable       = "waste_clinical",
+  category_order = waste_order,
+  output_file    = "bar_waste_clinical_overall.pdf",
+  output_dir     = hist_dir
+)
+```
+
+```{r waste-clinical-by-treatment}
+make_barchart(
+  df             = df_bl,
+  variable       = "waste_clinical",
+  group_var      = "treated",
+  group_labels   = list("0" = "Control", "1" = "Treatment"),
+  category_order = waste_order,
+  output_file    = "bar_waste_clinical_by_treatment.pdf",
+  output_dir     = hist_dir
+)
+```
+
+```{r waste-general-overall}
+make_barchart(
+  df             = df_bl,
+  variable       = "waste_general",
+  category_order = waste_order,
+  output_file    = "bar_waste_general_overall.pdf",
+  output_dir     = hist_dir
+)
+```
+
+```{r waste-general-by-treatment}
+make_barchart(
+  df             = df_bl,
+  variable       = "waste_general",
+  group_var      = "treated",
+  group_labels   = list("0" = "Control", "1" = "Treatment"),
+  category_order = waste_order,
+  output_file    = "bar_waste_general_by_treatment.pdf",
+  output_dir     = hist_dir
+)
+```
+
+# Specialized Equipment
+
+```{r spec-equip-labels, include=FALSE}
+# All specialized equipment plus "any" in one chart
+spec_equip_labels <- c(
+  pcr_indicator              = "PCR Machine",
+  ice_indicator              = "Ice Machine",
+  centrifuge_indicator       = "Centrifuge",
+  coffee_indicator           = "Coffee Machine",
+  microwave_indicator        = "Microwave",
+  animal_indicator           = "Animal Facility",
+  nonco2_incubator_indicator = "Non-CO2 Incubator",
+  c4_room_indicator          = "4°C Room",
+  minus_20c_room_indicator   = "-20°C Room",
+  other_indicator            = "Other",
+  any_spec_indicator         = "Any"
+)
+```
+
+```{r spec-equip-overall}
+make_indicator_barchart(
+  df          = df_bl,
+  item_cols   = names(spec_equip_labels),
+  item_labels = spec_equip_labels,
+  output_file = "bar_spec_equip_overall.pdf",
+  output_dir  = hist_dir
+)
+```
+
+```{r spec-equip-by-treatment}
+make_indicator_barchart(
+  df           = df_bl,
+  item_cols    = names(spec_equip_labels),
+  item_labels  = spec_equip_labels,
+  group_var    = "treated",
+  group_labels = list("0" = "Control", "1" = "Treatment"),
+  output_file  = "bar_spec_equip_by_treatment.pdf",
+  output_dir   = hist_dir
+)
+```

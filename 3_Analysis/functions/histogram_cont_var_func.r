@@ -55,12 +55,12 @@ make_histogram <- function(
   boundary = NULL,
   group_labels = NULL,
   show_median = FALSE,
-  x_label = NULL,
   x_limits = NULL,
   x_breaks = NULL,
   median_digits = 0,
   font_family = "",
-  output_dir = "."
+  output_dir = ".",
+  save = TRUE
 ) {
 
   # ----------------------------------------
@@ -77,13 +77,6 @@ make_histogram <- function(
     output_file <- paste0("hist_", variable, ".pdf")
   }
   output_path <- file.path(output_dir, output_file)
-
-  # ----------------------------------------
-  # Default x-axis label
-  # ----------------------------------------
-  if (is.null(x_label)) {
-    x_label <- gsub("_", " ", variable)
-  }
 
   # ----------------------------------------
   # Blue/red palette
@@ -143,7 +136,7 @@ make_histogram <- function(
         annotate("text", x = med, y = Inf,
                  label = paste0("Median = ", format(round(med, median_digits), scientific = FALSE, nsmall = median_digits)),
                  colour = palette[1], hjust = -0.1, vjust = 1.5,
-                 size = 3, family = font_family)
+                 size = 4, family = font_family)
     } else {
       medians <- df |>
         group_by(.data[[group_var]]) |>
@@ -162,7 +155,7 @@ make_histogram <- function(
                                   format(round(med_val, median_digits), scientific = FALSE, nsmall = median_digits)),
                    colour = palette[i], hjust = -0.1,
                    vjust = 1.5 + (i - 1) * 1.8,
-                   size = 3, family = font_family)
+                   size = 4, family = font_family)
       }
     }
   }
@@ -170,15 +163,26 @@ make_histogram <- function(
   # ----------------------------------------
   # Theme and labels
   # ----------------------------------------
+  # No x-axis title for continuous histograms; when x_breaks isn't given
+  # explicitly, fall back to evenly-spaced "pretty" round-number breaks
+  # (e.g. 5, 10, 15, ...) rather than whatever ggplot's generic default picks
+  x_breaks_use <- if (is.null(x_breaks)) scales::pretty_breaks(n = 6) else x_breaks
+
   p <- p +
     labs(
-      x = x_label,
+      x = NULL,
       y = "Percent"
     ) +
-    scale_x_continuous(labels = comma, breaks = x_breaks) +
-    theme_minimal(base_family = font_family) +
+    scale_x_continuous(labels = comma, breaks = x_breaks_use,
+                       expand = expansion(mult = c(0, 0.05))) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+    theme_minimal(base_family = font_family, base_size = 14) +
     theme(
-      legend.position    = if (!is.null(group_var)) "top" else "none",
+      legend.position    = if (!is.null(group_var)) "bottom" else "none",
+      legend.text        = element_text(size = 13),
+      axis.title.x       = element_blank(),
+      axis.title.y       = element_text(size = 14),
+      axis.text          = element_text(size = 12),
       axis.line          = element_line(colour = "black", linewidth = 0.4),
       axis.ticks         = element_line(colour = "black", linewidth = 0.4),
       axis.ticks.length  = unit(3, "pt"),
@@ -194,7 +198,14 @@ make_histogram <- function(
   # ----------------------------------------
   # Save to PDF
   # ----------------------------------------
-  ggsave(output_path, plot = p, width = 6, height = 4, device = "pdf")
+  # Skippable: opening/closing the ggsave device mid-loop disrupts plot
+  # ordering when this function is called repeatedly inside a results="asis"
+  # loop that also cat()s text (e.g. section headers) between plots. Callers
+  # doing that should pass save = FALSE and ggsave() the returned plot
+  # themselves outside the asis loop.
+  if (save) {
+    ggsave(output_path, plot = p, width = 6, height = 4, device = "pdf")
+  }
 
   p
 }
