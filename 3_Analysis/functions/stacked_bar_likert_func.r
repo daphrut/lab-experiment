@@ -35,11 +35,23 @@ make_stacked_bar <- function(
   output_path <- file.path(output_dir, output_file)
 
   # ----------------------------------------
-  # Default colors (sequential, low->high agreement, Okabe-Ito derived)
+  # Default colors (Okabe-Ito derived). Checklist responses get fixed
+  # semantic colors (Yes = green, No = red); anything else falls back to
+  # the sequential low->high gradient.
   # ----------------------------------------
   if (is.null(colors)) {
-    n_resp <- length(response_order)
-    colors <- colorRampPalette(c("#D55E00", "#F0E442", "#0072B2"))(n_resp)
+    semantic_colors <- c(
+      "Yes"            = "#4C9F70",
+      "I don't know"   = "#D9B84A",
+      "No"             = "#BC5B4D",
+      "Not applicable" = "#4472A0"
+    )
+    if (all(response_order %in% names(semantic_colors))) {
+      colors <- semantic_colors[response_order]
+    } else {
+      n_resp <- length(response_order)
+      colors <- colorRampPalette(c("#BC5B4D", "#D9B84A", "#4472A0"))(n_resp)
+    }
   }
 
   # ----------------------------------------
@@ -77,11 +89,19 @@ make_stacked_bar <- function(
   # Build plot
   # ----------------------------------------
   p <- ggplot(plot_data, aes(x = item, y = pct, fill = response)) +
-    geom_col(position = "stack", colour = "black", linewidth = 0.2, width = 0.7) +
+    geom_col(position = position_stack(reverse = TRUE), colour = "black",
+             linewidth = 0.2, width = 0.7) +
     scale_fill_manual(values = colors, name = NULL, breaks = response_order) +
     coord_flip() +
     labs(x = NULL, y = x_label) +
-    scale_y_continuous(labels = comma, limits = c(0, 100), expand = c(0, 0)) +
+    # oob = squish (rather than the default censor) clamps rather than drops
+    # cumulative stack values that float-point drift pushes fractionally past
+    # 100 (e.g. summing three n/sum(n)*100 terms via cumsum can land on
+    # 100.00000000000001, not exactly 100) -- censoring would otherwise NA out
+    # that segment and every segment stacked after it for the affected bar.
+    scale_y_continuous(labels = comma, limits = c(0, 100),
+                        expand = expansion(mult = c(0, 0.04)),
+                        oob = scales::squish) +
     theme_minimal(base_family = font_family, base_size = 14) +
     theme(
       legend.position    = "top",
