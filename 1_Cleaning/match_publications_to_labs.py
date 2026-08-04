@@ -1,48 +1,23 @@
 # ============================================================================
-# Function to match publication creators to labgroupids.
+# Match publication creators (ZORA) to labgroupids.
 #
-# THE PROBLEM
-# -----------
-# We want to know, for each publication, which of our lab's researchers (if
-# any) are among its authors - and therefore which labgroupid(s) it belongs to.
+# Complications handled below:
+#   1. A creator string lists multiple authors (" | "-separated), each
+#      optionally followed by an ORCID after a ";".
+#   2. The same name can be spelled more than one way: hyphen vs. space and
+#      accented characters are normalized deterministically; umlaut
+#      conventions (a literal umlaut vs. its "ue"/"oe"/"ae" digraph) require
+#      guessing, so every plausible spelling is generated and tried.
+#   3. First names are sometimes given only as an initial.
+#   4. A person may have a second given name; only the primary one is
+#      required to match.
+#   5. A surname may appear only as part of a longer, compound/hyphenated
+#      creator surname - accepted only alongside an exact first-name match
+#      (see verify() below for why).
 #
-# This is fiddly for three separate reasons, each handled separately below:
-#
-#   1. A creator string can have multiple authors (separated by " | "), and
-#      some authors have an ORCID web address tacked on after a ";".
-#
-#   2. The same name can be spelled in more than one way. We can normalize
-#      some of these differences deterministically (e.g. hyphen vs space), but
-#      others require guessing which convention the author used. In particular,
-#      we deal explicitly with umlaut conventions e.g. Müller/Muller/Mueller.
-#
-#   3. First names are sometimes just an initial ("J." instead of "John"),
-#      so first-name matching has to check for these matches too.
-#
-#   4. Some people have more than one given name (e.g. "Mark Duncan"). Only
-#      the primary (first) one is required to match; a second given name is
-#      only checked as an informational flag, never required - a citation
-#      might drop it entirely.
-#
-# THE APPROACH
-# ------------
-#
-#   1. Surnames and first/middle names are already split in the researcher
-#      data. ZORA always writes creators as "Surname, Firstname (Middle)".
-#
-#   2. We separate the ZORA data into one row per publication/creator pair.
-#      We normalize each creator's surname and first name. For any umlauts,
-#      we generate every plausible spelling of the surname and first name.
-#
-#   3. We normalize the researcher data in the same way, generating every
-#      plausible spelling of each researcher's surname and first name.
-#
-#   4. We match surnames by checking if any of the researcher's plausible
-#      spellings match any of the creator's. For first names, only the
-#      primary given name (token 1) has to match, exactly or via initial;
-#      a second given name, if present on either side, is checked too but
-#      only reported as a flag (middle_name_match), not required to match.
-#
+# Pipeline: normalize creator and researcher names into every plausible
+# spelling, find candidate (creator, researcher) pairs sharing a surname
+# token, then verify each pair in full.
 # ============================================================================
 
 import pandas as pd
@@ -52,9 +27,9 @@ from collections import namedtuple
 
 # Ranking used to pick the "best" (most confident) match when the same
 # labgroupid is reachable via more than one creator/tier on one publication.
-CONFIDENCE_RANK = {"exact": 0, "initial": 1}
+CONFIDENCE_RANK = {"exact": 0, "initial": 1, "partial_surname": 2}
 
-# A single plausible spelling of a name field (surname, or first name),
+# A single plausible spelling of a name field (surname or first name),
 # together with a note of why it's a guess rather than the literal text:
 #   tokens          -> the normalized word(s) for this spelling,
 #                      e.g. ["smith", "jones"]
@@ -67,14 +42,14 @@ Candidate = namedtuple("Candidate", ["tokens", "umlaut_variant"])
 # ----------------------------------------------------------------------------
 # SECTION 1 - generic, deterministic text normalization
 #
-# This is the "no guessing" pipeline applied to every piece of text on both
-# sides (creators and researchers): make special characters harmless, drop
+# The "no guessing" pipeline applied to every piece of text on both sides
+# (creators and researchers): make special characters harmless, drop
 # punctuation, lowercase, split into words. Always produces one answer.
 # ----------------------------------------------------------------------------
-#
-# Characters with no spelling ambiguity in plain ASCII - there is one clear 
-# transliteration, so we just substitute and move on (unlike umlauts, where
-# two conventions are both common enough that we have to check both).
+
+# Characters with one clear, undisputed ASCII spelling - just substitute and
+# move on (unlike umlauts, where two conventions are common enough that both
+# need checking).
 _DETERMINISTIC_SUBSTITUTIONS = [
     # Accents that have a single, standard ASCII spelling
     ("ß", "ss"),
@@ -122,9 +97,9 @@ def normalize_tokens(raw):
 # ----------------------------------------------------------------------------
 # SECTION 2 - variant generation (the umlaut guessing)
 #
-# For a name field on either side (ZORA or researchers), generate every
-# spelling that could be plausibly used for it, tagged with why it's a guess, 
-# so a downstream match can report exactly which assumption it relied on.
+# For a name field on either side, generate every spelling that could
+# plausibly be used for it, tagged with why it's a guess, so a downstream
+# match can report exactly which assumption it relied on.
 # ----------------------------------------------------------------------------
 
 # Literal umlaut character -> (plain-strip, digraph) e.g. "ü" -> ("u", "ue")
@@ -226,11 +201,10 @@ def parse_creator_entry(raw_entry):
     spelling of each half. Returns (surname_candidates, firstname_candidates)
     - both lists of Candidate(tokens, umlaut_variant).
 
-    firstname_candidates' tokens can include a second given name or a middle
-    name (e.g. "Mark Duncan" -> ["mark", "duncan"]) - every token is compared
-    against the researcher's given-name tokens later on, since a citation
-    might use any one of them, spelled out or abbreviated to an initial, not
-    necessarily the first.
+    firstname_candidates' tokens can include a second given name (e.g.
+    "Mark Duncan" -> ["mark", "duncan"]); each is compared against the
+    researcher's given-name tokens later, since a citation might use any one
+    of them, spelled out or abbreviated to an initial - not just the first.
     """
     if "," in raw_entry:
         # Split at the first comma
@@ -272,19 +246,17 @@ def match_publications_to_labs(
                                 ANY creator on this publication (can legitimately
                                 be longer than 1 - a paper can have co-authors
                                 from different labs; that's normal, not an error)
-        match_confidence     -> parallel list, "exact" or "initial", scoped to
-                                the PRIMARY (first) given-name comparison for
+        match_confidence    -> parallel list, one of "exact" / "initial" /
+                                "partial_surname" (see verify() below) for
                                 that labgroupid
-        umlaut_variant        -> parallel list of booleans: did matching that
+        umlaut_variant       -> parallel list of booleans: did matching that
                                 labgroupid require assuming an umlaut<->digraph
                                 swap, on either the creator or researcher side?
-        middle_name_match     -> parallel list of booleans: for a researcher
-                                with a second given name / middle name (or a
-                                citation that includes one), did it also line
-                                up? This is informational only - it never
-                                affects whether something counts as a match,
-                                since a citation might drop a middle name
-                                entirely (or vice versa).
+        middle_name_match    -> parallel list of booleans: for a researcher
+                                with a second given name (or a citation that
+                                includes one), did it also line up? Informational
+                                only - never affects whether something counts as
+                                a match, since a citation might drop it entirely.
     """
 
     # ---- Step 1: one row per (publication, individual creator) ------------
@@ -324,13 +296,11 @@ def match_publications_to_labs(
     researchers["first_name_candidates"] = researchers[first_name_col].apply(generate_field_variants)
 
     # ---- Step 5: blocking - cheaply narrow down candidate pairs ------------
-    # Checking every creator string against every researcher's full candidate
-    # list would work but is wasteful. Instead, index every token that
-    # appears in ANY surname candidate - on both the researcher side and now
-    # the creator side too - then use a plain pd.merge on shared tokens to
-    # find just the (creator, researcher) pairs worth fully verifying. A
-    # creator with zero surname-token overlap with any researcher is
-    # discarded for free right here.
+    # Checking every creator against every researcher's full candidate list
+    # would work but is wasteful. Instead, index every surname token on both
+    # sides and pd.merge on shared tokens to find just the (creator,
+    # researcher) pairs worth fully verifying - a creator with zero overlap
+    # is discarded for free.
     researcher_token_rows = [
         (row.researcher_idx, tok)
         for row in researchers.itertuples()
@@ -355,39 +325,53 @@ def match_publications_to_labs(
     # ---- Step 6: verify each candidate pair --------------------------------
     def verify(row):
         """
-        Full check for one (creator, researcher) candidate pair. Surname must
-        match exactly (as a full set of tokens) via some combination of a
-        researcher candidate and a creator candidate.
+        Full check for one (creator, researcher) candidate pair.
+
+        Surname: "exact" is a full token-set match. A weaker "subset" match
+        also accepts the researcher's surname as a strict subset of a
+        compound/hyphenated creator surname (e.g. researcher "Smith" against
+        creator "Jones-Smith") - this catches a researcher registered under a
+        shortened surname who consistently publishes under a fuller one (a
+        married name not reflected in the lab roster). On its own that's too
+        weak to trust: it would equally match an unrelated person whose
+        compound surname happens to share the same token. So a subset match
+        is only accepted alongside an exact match on the first name below -
+        an initial alone isn't enough evidence to tell the two cases apart.
 
         First name: only the PRIMARY given name (token[0] on each side) is
-        required to match, exactly or via an initial (creator side only - the
-        researcher's manually-entered given names are never just an initial).
-        If either side also has a second given name / middle name (e.g.
-        "Mark Duncan"), that's checked too, but only as a non-blocking
-        `middle_name_match` flag - it doesn't gate whether this counts as a
-        match, since a citation might drop a middle name entirely, or the
-        researcher's own middle name might just not appear anywhere in it.
+        required to match, exactly or via a creator-side initial. A second
+        given name on either side is checked too, but only as a non-blocking
+        `middle_name_match` flag, since a citation might drop it entirely.
 
-        Among all combinations that pass, we always keep the "cleanest"
-        (fewest guesses) one, so the reported flags reflect the least
-        speculative explanation available.
+        Among passing combinations, keep the cleanest (fewest guesses).
         """
         creator_surname_cands = creator_surname_candidates_map[row["creator_key"]]
         creator_firstname_cands = creator_firstname_candidates_map[row["creator_key"]]
         researcher_row = researchers.loc[row["researcher_idx"]]
 
-        # --- surname: best (fewest-guesses) matching combination ---
-        best_surname_umlaut = None
+        # --- surname: best (tightest, fewest-guesses) matching combination ---
+        # surname_tier_rank: 0 = exact token-set match, 1 = subset (compound/
+        # hyphenated creator surname containing the researcher's as one part)
+        best_surname = None  # (surname_tier_rank, umlaut)
         for r_cand in researcher_row["surname_candidates"]:
             r_tokens = set(r_cand.tokens)
             for c_cand in creator_surname_cands:
-                if r_tokens.issubset(set(c_cand.tokens)):
-                    combined = r_cand.umlaut_variant or c_cand.umlaut_variant
-                    if best_surname_umlaut is None or combined < best_surname_umlaut:
-                        best_surname_umlaut = combined
+                c_tokens = set(c_cand.tokens)
+                if r_tokens == c_tokens:
+                    surname_tier_rank = 0
+                elif r_tokens.issubset(c_tokens):
+                    surname_tier_rank = 1
+                else:
+                    continue
+                combined = r_cand.umlaut_variant or c_cand.umlaut_variant
+                score = (surname_tier_rank, combined)
+                if best_surname is None or score < best_surname:
+                    best_surname = score
 
-        if best_surname_umlaut is None or not creator_firstname_cands:
+        if best_surname is None or not creator_firstname_cands:
             return False, None, None, None
+
+        surname_tier_rank, surname_umlaut = best_surname
 
         # --- first name: only the primary (first) given name is required ---
         best_first = None  # (score_tuple, tier, combined_umlaut, middle_name_match)
@@ -427,10 +411,17 @@ def match_publications_to_labs(
 
         _, first_name_tier, first_name_umlaut, middle_name_match = best_first
 
+        # A subset (compound/hyphenated) surname match is only trustworthy
+        # paired with an exact first name - see docstring above.
+        if surname_tier_rank == 1 and first_name_tier != "exact":
+            return False, None, None, None
+
+        match_confidence = "partial_surname" if surname_tier_rank == 1 else first_name_tier
+
         return (
             True,
-            first_name_tier,
-            best_surname_umlaut or first_name_umlaut,
+            match_confidence,
+            surname_umlaut or first_name_umlaut,
             middle_name_match,
         )
 
