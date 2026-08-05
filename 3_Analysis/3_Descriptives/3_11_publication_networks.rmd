@@ -1,0 +1,424 @@
+---
+title: "Publications and Co-Authorship Networks"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.show = "show")
+```
+
+This notebook creates descriptives of the publication data:
+
+- Publications per lab group and over time
+- The co-authorship network: nodes = lab groups, edges = shared publications
+- Network structure (within and between faculties) 
+- Network structure by treatment/control (relevant for spillovers)
+- Networks between institutes (heatmap)
+
+## Set-up
+
+```{r config-and-libraries, include=FALSE}
+library(here)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(igraph)
+library(tidygraph)
+library(ggraph)
+library(knitr)
+
+source(here("config.R"))
+source(here("3_Analysis", "functions", "histogram_cont_var_func.r"))
+
+pub_dir <- file.path(OUTPUT, "11_Publications")
+dir.create(pub_dir, showWarnings = FALSE, recursive = TRUE)
+
+# Project palette (Okabe-Ito): blue = control, vermillion = treatment
+palette_arm <- c("Control" = "#0072B2", "Treated" = "#D55E00")
+
+# Faculty palette - deliberately avoids blue/vermillion so faculty colours
+# are never confused with the treatment/control colours above; MNF uses a
+# darker violet instead of Okabe-Ito's orange, which was too light to read
+# clearly against a white background
+palette_faculty <- c("MNF" = "#5D3A9B", "MeF" = "#CC79A7", "Both" = "#009E73")
+```
+
+```{r load-data}
+# Labs data
+labs <- read.csv(
+  file.path(CLEAN_DATA, "final_dataset.csv"),
+  na.strings = "",
+  colClasses = c(labgroupid = "character")
+) %>%
+  select(labgroupid, treated, faculty, institute_id, survey, consent_data_merge)
+
+# Publications data
+publications <- read.csv(
+  file.path(PUBLICATON_DATA, "2_Processed", "publications_matched.csv"),
+  na.strings = ""
+) %>%
+  select(relation, matched_labgroupids, n_matched_labgroupids, date, description)
+
+cat(nrow(publications), "matched publications\n")
+```
+
+```{r restrict-labs}
+# Keep only BL obs, one row per labgroupid
+labs <- labs %>% filter(survey == "BL")
+```
+
+```{r prep-publications}
+# Create list-column of labgroupids for each publication
+publications <- publications %>%
+  mutate(
+    lab_ids = strsplit(as.character(matched_labgroupids), ";"),
+    year = as.numeric(substr(as.character(date), 1, 4))
+  )
+```
+
+## (1) Descriptives of publications per group and over time
+
+```{r pubs-per-lab}
+# Publications per lab group
+pub_counts <- publications %>%
+  select(relation, lab_ids) %>%
+  unnest(lab_ids) %>%
+  rename(labgroupid = lab_ids) %>%
+  count(labgroupid, name = "n_pubs")
+
+labs_pub <- labs %>% left_join(pub_counts, by = "labgroupid")
+
+# Replace n_pubs with 0 for lab groups with no matched publications where
+# consent_data_merge is "Yes"
+labs_pub <- labs_pub %>%
+  mutate(n_pubs = ifelse(
+    consent_data_merge == "Yes I consent to this data collection and merging" & n_pubs == 0,
+    0,
+    n_pubs
+  ))
+
+n_zero <- sum(labs_pub$n_pubs == 0, na.rm = TRUE)
+n_missing <- sum(is.na(labs_pub$n_pubs))
+cat(n_zero, "lab groups consented to merging but have no matched publications\n")
+cat(n_missing, "lab groups did not consent to merging\n")
+```
+
+```{r high-pub-groups}
+# Check pubs for groups with >100 publications
+high_pub_groups_df <- labs_pub %>%
+  filter(n_pubs > 100) %>%
+  select(labgroupid, n_pubs, faculty, institute_id)
+
+kable(high_pub_groups_df, row.names = FALSE)
+
+high_pub_groups <- high_pub_groups_df$labgroupid
+```
+
+
+```{r hist-pubs-per-lab}
+make_histogram(
+  df          = labs_pub,
+  variable    = "n_pubs",
+  output_file = "pubs_per_lab_hist.pdf",
+  binwidth    = 50,
+  boundary    = 0,
+  output_dir  = pub_dir
+)
+```
+
+```{r pubs-over-time}
+year_counts <- publications %>% count(year)
+
+p <- ggplot(year_counts, aes(x = year, y = n)) +
+  geom_line(colour = "#0072B2") +
+  geom_point(colour = "#0072B2") +
+  labs(x = "Year", y = "Number of matched publications") +
+  theme_minimal(base_size = 14) +
+  theme(panel.grid.minor = element_blank())
+
+ggsave(file.path(pub_dir, "pubs_over_time.pdf"), plot = p, width = 8, height = 5)
+p
+```
+
+## (3) Co-authorship network between lab groups
+
+```{r hist-n-matched-labgroupids}
+# Number of lab groups matched to each publication, with the underlying
+# percentage labelled above each bar (make_histogram() doesn't support
+# labels, so this is a plain geom_col over pre-tallied counts instead)
+n_matched_summary <- publications %>%
+  count(n_matched_labgroupids) %>%
+  mutate(pct = n / sum(n) * 100)
+
+p <- ggplot(n_matched_summary, aes(x = factor(n_matched_labgroupids), y = pct)) +
+  geom_col(fill = "#0072B2", alpha = 0.8, colour = "#0072B2", width = 0.9) +
+  geom_text(aes(label = sprintf("%.2f%%", pct)), vjust = -0.4, size = 4) +
+  labs(x = NULL, y = "Percent") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.line          = element_line(colour = "black", linewidth = 0.4),
+    axis.ticks         = element_line(colour = "black", linewidth = 0.4),
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor   = element_blank(),
+    panel.grid.major.y = element_line(colour = "grey85", linewidth = 0.3)
+  )
+
+ggsave(file.path(pub_dir, "n_matched_labgroupids_hist.pdf"), plot = p, width = 6, height = 4)
+p
+```
+
+In this network, each **node** is a lab group, and each **edge** is a link
+drawn between two lab groups whenever they co-author at least one publication
+together (i.e. a publication matched to both of them). An edge's **weight** is
+how many publications that pair of lab groups shares.
+
+Only publications matched to 2+ lab groups carry information about links 
+*between* lab groups; single-lab publications don't contribute an edge. 
+For each such publication, every pair of matched lab groups gets an edge, 
+weighted by the number of publications they share.
+
+```{r build-network}
+# Build edge weights: for each publication matched to 2+ labs, add 1 to every
+# pair of matched labgroupids
+multi_lab_pubs <- publications %>% filter(n_matched_labgroupids > 1)
+cat(nrow(multi_lab_pubs), "of", nrow(publications), "publications link 2+ lab groups\n")
+
+edge_list <- multi_lab_pubs$lab_ids %>%
+  lapply(function(ids) {
+    ids <- sort(unique(ids))
+    if (length(ids) < 2) return(NULL)
+    as.data.frame(t(combn(ids, 2)), stringsAsFactors = FALSE)
+  }) %>%
+  bind_rows() %>%
+  rename(labgroupid_a = V1, labgroupid_b = V2) %>%
+  count(labgroupid_a, labgroupid_b, name = "n_shared_pubs")
+
+# Build the graph: node = every consenting lab group (non-missing n_pubs);
+# edge = shared publication(s). Non-consenting labs are excluded entirely.
+labs_consented <- labs_pub %>% filter(!is.na(n_pubs))
+
+g <- graph_from_data_frame(
+  d = edge_list,
+  vertices = labs_consented %>% select(labgroupid, treated, faculty),
+  directed = FALSE
+)
+
+cat(vcount(g), "nodes,", ecount(g), "edges, density =", round(edge_density(g), 4), "\n")
+
+# Tidy version with readable group labels, plus a single shared layout so
+# every plot below places each lab group at the same position (comparable
+# across the faculty- and treatment-coloured versions)
+g_tidy <- as_tbl_graph(g) %>%
+  mutate(
+    treated_lbl = ifelse(treated == 1, "Treated", "Control"),
+    faculty_lbl = case_when(
+      faculty == "Faculty of Science (MNF)"  ~ "MNF",
+      faculty == "Faculty of Medicine (MeF)" ~ "MeF",
+      faculty == "Both MNF and MeF"          ~ "Both",
+      TRUE ~ faculty
+    )
+  )
+
+set.seed(42)
+graph_layout <- create_layout(g_tidy, layout = "fr")
+```
+
+```{r network-structure}
+deg <- degree(g)
+isolates <- names(deg[deg == 0])
+comp <- components(g)
+component_sizes <- sort(comp$csize[comp$csize > 1], decreasing = TRUE)
+
+cat(length(isolates), "lab groups never co-publish with another lab group in the sample\n")
+cat(length(component_sizes), "connected components of size >= 2, sizes:",
+    paste(component_sizes, collapse = ", "), "\n")
+cat("Largest connected component covers",
+    ifelse(length(component_sizes) > 0, component_sizes[1], 0), "lab groups\n")
+
+degree_df <- data.frame(labgroupid = names(deg), degree = as.integer(deg)) %>%
+  filter(degree > 0)
+
+make_histogram(
+  df          = degree_df,
+  variable    = "degree",
+  output_file = "network_degree_hist.pdf",
+  binwidth    = 1,
+  boundary    = 0.5,
+  output_dir  = pub_dir
+)
+```
+
+```{r top-edges}
+# Report the top 10 edges (lab group pairs with most shared pubs)
+top_edges <- edge_list %>% arrange(desc(n_shared_pubs)) %>% head(10)
+kable(top_edges, row.names = FALSE)
+```
+
+```{r network-plot-faculty, fig.width=10, fig.height=10}
+# Network graph, nodes coloured by faculty, to see whether co-authorship
+# clusters within vs. across faculties; edge width by log(shared pubs) so 
+# more readable (there is one single much larger edge).
+p <- ggraph(graph_layout) +
+  geom_edge_link(aes(width = log1p(n_shared_pubs)), colour = "grey60", alpha = 0.5) +
+  scale_edge_width(range = c(0.2, 3), guide = "none") +
+  geom_node_point(aes(colour = faculty_lbl), size = 3) +
+  scale_colour_manual(values = palette_faculty, name = NULL) +
+  labs(
+    title = "Lab group co-authorship network, by faculty",
+    subtitle = "Edge width scales with log(shared publications)"
+  ) +
+  theme_void(base_size = 14) +
+  theme(legend.position = "bottom")
+
+ggsave(file.path(pub_dir, "lab_network_faculty.pdf"), plot = p, width = 10, height = 10)
+p
+```
+
+## (4) Treatment / control mixing
+
+Each edge is classified as **same-arm** (treated-treated or control-control)
+or **cross-arm** (treated-control).
+
+```{r classify-edges}
+treated_map <- setNames(labs_consented$treated, labs_consented$labgroupid)
+
+edge_list <- edge_list %>%
+  mutate(
+    treated_a = treated_map[labgroupid_a],
+    treated_b = treated_map[labgroupid_b],
+    arm_relationship = ifelse(treated_a == treated_b, "same", "cross")
+  )
+
+# The number of edges that are same-arm vs cross-arm
+print(table(edge_list$arm_relationship))
+
+# The proportion of edges that are same-arm vs cross-arm
+print(round(prop.table(table(edge_list$arm_relationship)), 3))
+```
+
+```{r degree-by-arm}
+# Within-arm vs cross-arm degree, among lab groups with at least one
+# co-publication link
+degree_by_arm <- lapply(V(g)$name, function(v) {
+  if (deg[v] == 0) return(NULL)
+  own_treated <- V(g)$treated[V(g)$name == v]
+  nbrs <- neighbors(g, v)
+  nbr_treated <- V(g)$treated[nbrs]
+  data.frame(
+    labgroupid = v,
+    treated = own_treated,
+    within_arm_degree = sum(nbr_treated == own_treated),
+    cross_arm_degree = sum(nbr_treated != own_treated)
+  )
+}) %>% bind_rows()
+
+# Summarise the average within-arm and cross-arm degree by treatment status
+degree_by_arm %>%
+  group_by(treated) %>%
+  summarise(
+    within_arm_degree = round(mean(within_arm_degree), 2),
+    cross_arm_degree = round(mean(cross_arm_degree), 2),
+    .groups = "drop"
+  ) %>%
+  kable(row.names = FALSE)
+```
+
+```{r network-plot, fig.width=10, fig.height=10}
+# Same network and layout as the faculty-coloured plot above, nodes coloured
+# by treatment status instead; edge width by log(shared pubs) so more
+# readable (there is one single much larger edge).
+p <- ggraph(graph_layout) +
+  geom_edge_link(aes(width = log1p(n_shared_pubs)), colour = "grey60", alpha = 0.5) +
+  scale_edge_width(range = c(0.2, 3), guide = "none") +
+  geom_node_point(aes(colour = treated_lbl), size = 3) +
+  scale_colour_manual(values = palette_arm, name = NULL) +
+  labs(
+    title = "Lab group co-authorship network",
+    subtitle = "Edge width scales with log(shared publications)"
+  ) +
+  theme_void(base_size = 14) +
+  theme(legend.position = "bottom")
+
+ggsave(file.path(pub_dir, "lab_network.pdf"), plot = p, width = 10, height = 10)
+p
+```
+
+## (5) Networks between institutes
+
+We show this as a heatmap as there are too many institutes to distinguish by
+node colour in a network graph.
+
+```{r institute-heatmap, fig.width=9, fig.height=8}
+# Create heatmap of shared publications within and between institutes, using
+# the same edge_list as above (labgroupid_a, labgroupid_b, n_shared_pubs)
+institute_map <- setNames(labs_consented$institute_id, labs_consented$labgroupid)
+institute_sizes <- labs_consented %>% count(institute_id, name = "n_labs")
+all_institutes <- sort(unique(labs_consented$institute_id))
+
+# Number of distinct lab-pairs actually connected (>=1 shared publication),
+# by institute pair - a count of EDGES, not a sum of shared-publication counts
+institute_pair_edges <- edge_list %>%
+  mutate(
+    institute_a = institute_map[labgroupid_a],
+    institute_b = institute_map[labgroupid_b],
+    inst_lo = pmin(institute_a, institute_b),
+    inst_hi = pmax(institute_a, institute_b)
+  ) %>%
+  count(inst_lo, inst_hi, name = "n_connected_pairs")
+
+# Number of possible lab-pairs for each institute pair: n_a * n_b across
+# institutes, or choose(n, 2) within the same institute
+institute_grid <- expand.grid(institute_a = all_institutes, institute_b = all_institutes) %>%
+  left_join(institute_sizes, by = c("institute_a" = "institute_id")) %>%
+  rename(n_a = n_labs) %>%
+  left_join(institute_sizes, by = c("institute_b" = "institute_id")) %>%
+  rename(n_b = n_labs) %>%
+  mutate(
+    n_possible = ifelse(institute_a == institute_b, n_a * (n_a - 1) / 2, n_a * n_b),
+    inst_lo = pmin(institute_a, institute_b),
+    inst_hi = pmax(institute_a, institute_b)
+  ) %>%
+  left_join(institute_pair_edges, by = c("inst_lo", "inst_hi")) %>%
+  mutate(
+    n_connected_pairs = ifelse(is.na(n_connected_pairs), 0, n_connected_pairs),
+    # NA (not 0) for institutes with <2 consenting labs - there's no possible
+    # within-institute pair to measure at all
+    density = ifelse(n_possible > 0, n_connected_pairs / n_possible, NA_real_)
+  )
+
+p <- ggplot(institute_grid, aes(x = factor(institute_a), y = factor(institute_b), fill = density)) +
+  geom_tile(colour = "white", linewidth = 0.3) +
+  scale_fill_gradient(
+    low = "white", high = "#0072B2", limits = c(0, 1), labels = scales::percent,
+    na.value = "grey85", name = "Share of possible\nlab-pairs collaborating"
+  ) +
+  labs(
+    x = "Institute ID", y = "Institute ID",
+    title = "Collaboration density between institutes",
+    subtitle = "Diagonal = within-institute share; grey = institute has <2 consenting labs"
+  ) +
+  coord_fixed() +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    panel.grid = element_blank()
+  )
+
+ggsave(file.path(pub_dir, "institute_heatmap.pdf"), plot = p, width = 9, height = 8)
+p
+```
+
+## Save processed data
+
+```{r save-outputs}
+edge_list <- edge_list %>% arrange(desc(n_shared_pubs))
+write.csv(
+  edge_list,
+  file.path(PUBLICATON_DATA, "3_Clean", "lab_coauthorship_edges.csv"),
+  row.names = FALSE
+)
+```

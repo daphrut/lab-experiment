@@ -221,3 +221,6 @@ config.r
 
 # HTML files
 *.html
+
+# z_old folder
+z_old/
