@@ -1,0 +1,78 @@
+---
+title: "Equipment Energy Composition"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: true
+---
+
+100% stacked bar chart of BL equipment energy composition, for the main text: each
+segment is one equipment type's share of total energy use, computed as the ratio of
+averages - mean `annual_electricity_<type>` across labs, divided by the sum of all
+types' means (which matches `annual_electricity_total`'s mean exactly - the 11 types
+are exhaustive, no residual "other" category needed). Segments are ordered 
+largest-to-smallest by the "overall" bar, that order is kept fixed across the 
+by-faculty bars too, so the same equipment type lines up in the same position.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.show = "show")
+```
+
+```{r config-and-libraries, include=FALSE}
+library(here)
+library(dplyr)
+
+# Load config and functions
+source(here("config.R"))
+source(here("3_Analysis", "functions", "stacked_bar_energy_share_func.r"))
+
+# Output directory
+hist_dir <- file.path(OUTPUT, "6_Histograms")
+dir.create(hist_dir, showWarnings = FALSE, recursive = TRUE)
+```
+
+```{r load-data}
+df <- read.csv(file.path(CLEAN_DATA, "final_dataset.csv"))
+```
+
+```{r restrict-sample}
+# Same "BL, sample with matched EL data" restriction as the electricity histograms
+df_sample <- df %>%
+  group_by(labgroupid) %>%
+  filter(n() == 2) %>%
+  ungroup()
+
+df_bl <- df_sample %>% filter(survey == "BL") %>%
+  mutate(MNF = ifelse(faculty == "Faculty of Science (MNF)", 1, 0))
+```
+
+```{r energy-cols}
+# Column -> display label, for all 11 equipment types that sum to
+# annual_electricity_total (matches the labelling used in
+# 3_8_hist_equipment.rmd's equipment counts)
+energy_cols <- c(
+  annual_electricity_it        = "IT Equipment",
+  annual_electricity_fc        = "Fume Cupboards",
+  annual_electricity_freezer   = "Freezers",
+  annual_electricity_ult       = "ULT Freezers",
+  annual_electricity_fridge    = "Fridges",
+  annual_electricity_incubator = "CO2 Incubators",
+  annual_electricity_microbio  = "MSCs",
+  annual_electricity_glassware = "Drying Cabinets",
+  annual_electricity_bath      = "Water Baths",
+  annual_electricity_cryostat  = "Cryostats",
+  annual_electricity_heater    = "Block Heaters"
+)
+```
+
+```{r equipment-share-bar}
+make_energy_share_bar(
+  df           = df_bl,
+  energy_cols  = energy_cols,
+  bar_var      = "MNF",
+  bar_labels   = list("0" = "Medicine or Joint", "1" = "Science"),
+  output_file  = "equipment_energy_share.pdf",
+  font_family  = "serif",  # matches the paper's Times-style LaTeX typesetting
+  output_dir   = hist_dir
+)
+```
