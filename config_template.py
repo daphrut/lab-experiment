@@ -43,16 +43,23 @@ BL_DATA_ROOT = DATA_ROOT / "12_BL_Data"
 BL_RAW_SAMPLE = BL_DATA_ROOT / "1_Sample"
 BL_RAW_SURVEY = BL_DATA_ROOT / "2_Raw_Survey"
 BL_RAW_CHECKLIST = BL_DATA_ROOT / "3_Raw_Checklist"
+WAVE2_BL_RAW_SAMPLE = BL_DATA_ROOT / "4_Sample_W2"
+WAVE2_BL_RAW_SURVEY = BL_DATA_ROOT / "5_Raw_Survey_W2"
+WAVE2_BL_RAW_CHECKLIST = BL_DATA_ROOT / "6_Raw_Checklist_W2"
 
 # BL backup data folders
 BL_DATA_BACKUP = BACKUP_ROOT / "12_BL_Data"
 BL_RAW_SAMPLE_BACKUP = BL_DATA_BACKUP / "1_Sample"
 BL_RAW_SURVEY_BACKUP = BL_DATA_BACKUP / "2_Raw_Survey"
 BL_RAW_CHECKLIST_BACKUP = BL_DATA_BACKUP / "3_Raw_Checklist"
+WAVE2_BL_RAW_SAMPLE_BACKUP = BL_DATA_BACKUP / "4_Sample_W2"
+WAVE2_BL_RAW_SURVEY_BACKUP = BL_DATA_BACKUP / "5_Raw_Survey_W2"
+WAVE2_BL_RAW_CHECKLIST_BACKUP = BL_DATA_BACKUP / "6_Raw_Checklist_W2"
 
 # Calculators folder
 CALCULATORS_ROOT = DATA_ROOT / "13_Calculators"
 CALCULATORS_WITH_TIPS = CALCULATORS_ROOT / "8_Final_Calculators"
+CALCULATORS_WITH_TIPS_W2 = CALCULATORS_ROOT / "12_Final_Calculators_W2"
 
 # EL survey folder (empty)
 EL_EMPTY_ROOT = DATA_ROOT / "14_EL_Empty"
@@ -75,6 +82,9 @@ CLEAN_DATA = DATA_ROOT / "17_Clean_Data"
 
 # Sensitive data folder
 SENSITIVE_DATA = DATA_ROOT / "18_Sensitive_Data"
+
+# Publication data folder
+PUBLICATON_DATA = DATA_ROOT / "19_Publication_Data"
 
 # Code folder (current folder)
 CODE_ROOT = Path(__file__).resolve().parent

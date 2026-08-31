@@ -73,6 +73,9 @@ CLEAN_DATA <- file.path(DATA_ROOT, "17_Clean_Data")
 # Sensitive data folder
 SENSITIVE_DATA <- file.path(DATA_ROOT, "18_Sensitive_Data")
 
+# Publication data folder
+PUBLICATON_DATA <- file.path(DATA_ROOT, "19_Publication_Data")
+
 # Output folder
 OUTPUT <- file.path(OVERLEAF_ROOT, "2_Output")
 
