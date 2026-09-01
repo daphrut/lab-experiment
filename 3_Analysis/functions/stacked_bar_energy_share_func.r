@@ -115,7 +115,7 @@ make_energy_share_bar <- function(
     geom_col(position = position_stack(reverse = TRUE), colour = "black",
              linewidth = 0.2, width = 0.6) +
     geom_text(aes(label = label), position = position_stack(reverse = TRUE, vjust = 0.5),
-              colour = "black", size = 3.6, family = font_family) +
+              colour = "black", size = 6, family = font_family) +
     scale_fill_manual(values = equip_colors, name = NULL, breaks = equip_labels_ordered) +
     coord_flip() +
     labs(x = NULL, y = x_label) +
@@ -124,14 +124,14 @@ make_energy_share_bar <- function(
     scale_y_continuous(labels = comma, limits = c(0, 100),
                         expand = expansion(mult = c(0, 0.04)),
                         oob = scales::squish) +
-    theme_minimal(base_family = font_family, base_size = 14) +
+    theme_minimal(base_family = font_family, base_size = 19) +
     theme(
       legend.position       = "bottom",
       legend.justification  = "center",
       legend.box.just       = "center",
-      legend.text           = element_text(size = 10),
-      axis.title            = element_text(size = 14),
-      axis.text             = element_text(size = 13),
+      legend.text           = element_text(size = 17),
+      axis.title            = element_text(size = 20),
+      axis.text             = element_text(size = 18),
       axis.line.x           = element_line(colour = "black", linewidth = 0.4),
       axis.ticks.x          = element_line(colour = "black", linewidth = 0.4),
       axis.ticks.y          = element_blank(),
@@ -147,8 +147,8 @@ make_energy_share_bar <- function(
   # multi-row legend of equipment types)
   # ----------------------------------------
   n_legend_rows <- ceiling(n_equip / legend_ncol)
-  plot_height <- max(4.5, 0.9 * length(bar_levels) + 1.3 + 0.4 * n_legend_rows)
-  ggsave(output_path, plot = p, width = 10, height = plot_height, device = "pdf")
+  plot_height <- max(5, 0.95 * length(bar_levels) + 1.5 + 0.6 * n_legend_rows)
+  ggsave(output_path, plot = p, width = 15, height = plot_height, device = "pdf")
 
   p
 }

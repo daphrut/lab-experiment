@@ -52,16 +52,16 @@ df_bl <- df_sample %>% filter(survey == "BL") %>%
 # 3_8_hist_equipment.rmd's equipment counts)
 energy_cols <- c(
   annual_electricity_it        = "IT Equipment",
-  annual_electricity_fc        = "Fume Cupboards",
-  annual_electricity_freezer   = "Freezers",
-  annual_electricity_ult       = "ULT Freezers",
-  annual_electricity_fridge    = "Fridges",
-  annual_electricity_incubator = "CO2 Incubators",
-  annual_electricity_microbio  = "MSCs",
-  annual_electricity_glassware = "Drying Cabinets",
-  annual_electricity_bath      = "Water Baths",
-  annual_electricity_cryostat  = "Cryostats",
-  annual_electricity_heater    = "Block Heaters"
+  annual_electricity_fc        = "Fume Cupboard",
+  annual_electricity_freezer   = "Freezer",
+  annual_electricity_ult       = "ULT Freezer",
+  annual_electricity_fridge    = "Fridge",
+  annual_electricity_incubator = "CO2 Incubator",
+  annual_electricity_microbio  = "MSC",
+  annual_electricity_glassware = "Drying Cabinet",
+  annual_electricity_bath      = "Water Bath",
+  annual_electricity_cryostat  = "Cryostat",
+  annual_electricity_heater    = "Block Heater"
 )
 ```
 
@@ -71,6 +71,7 @@ make_energy_share_bar(
   energy_cols  = energy_cols,
   bar_var      = "MNF",
   bar_labels   = list("0" = "Medicine or Joint", "1" = "Science"),
+  legend_ncol  = 6,  # 11 items -> rows of 6 + 5
   output_file  = "equipment_energy_share.pdf",
   font_family  = "serif",  # matches the paper's Times-style LaTeX typesetting
   output_dir   = hist_dir
