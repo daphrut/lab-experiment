@@ -75,3 +75,44 @@ make_barchart(
   output_dir     = hist_dir
 )
 ```
+
+Collapsed to 3 categories ("A moderate amount", "Quite a lot", and "A great deal"
+merged into one), styled to match `3_1_hist_electricity_truncated.rmd`'s ungrouped
+("overall") panels - bluish-green fill, larger serif font, no axis ticks - via
+`make_barchart()`'s style-override parameters.
+
+```{r checklist-discussion-collapsed}
+df_bl <- df_bl %>%
+  mutate(checklist_discussion_collapsed = case_when(
+    checklist_discussion %in% c("A moderate amount", "Quite a lot", "A great deal") ~
+      "A moderate amount to a great deal",
+    TRUE ~ checklist_discussion
+  ))
+
+discussion_order_collapsed <- c(
+  "Not at all", "A little", "A moderate amount to a great deal"
+)
+
+make_barchart(
+  df                = df_bl,
+  variable          = "checklist_discussion_collapsed",
+  category_order    = discussion_order_collapsed,
+  output_file       = "bar_checklist_discussion_collapsed.pdf",
+  output_dir        = hist_dir,
+  font_family       = "serif",
+  bar_colour        = "#009E73",
+  alpha             = 0.6,
+  outline_alpha     = 1,
+  linewidth         = 0.7,
+  base_size         = 16,
+  label_size        = 4.6,
+  label_vjust       = -0.6,
+  show_ticks        = FALSE,
+  axis_text_x_size  = 12.5,
+  axis_text_y_size  = 15,
+  axis_title_y_size = 17,
+  y_expand          = 0.15,
+  width             = 7,
+  height            = 4.5
+)
+```

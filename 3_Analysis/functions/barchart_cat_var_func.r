@@ -26,7 +26,32 @@ make_barchart <- function(
   group_labels = NULL,
   show_pct_labels = TRUE,
   font_family = "",
-  output_dir = "."
+  output_dir = ".",
+  # Style overrides - all default to this function's original look, so
+  # existing calls (e.g. spark_awareness in 3_10_hist_el_vars.rmd) are
+  # unaffected. Pass these to match a different chart's style instead, e.g.
+  # make_truncated_histogram's ungrouped ("overall") panels: bar_colour =
+  # "#009E73", alpha = 0.6, outline_alpha = 1, linewidth = 0.7, base_size =
+  # 16, label_size = 4.6, label_vjust = -0.6, show_ticks = FALSE,
+  # axis_text_x_size = 12.5, axis_text_y_size = 15, axis_title_y_size = 17,
+  # y_expand = 0.15, width = 7, height = 4.5.
+  bar_colour = NULL,          # NULL -> palette[1] (ungrouped only)
+  alpha = 0.8,                # fill opacity
+  outline_alpha = alpha,      # outline opacity - defaults to matching alpha
+                               # (the original single geom_col(alpha=) look);
+                               # pass 1 for a muted fill / full-strength
+                               # outline, as in make_truncated_histogram
+  linewidth = 0.3,
+  base_size = 14,
+  label_size = 4,
+  label_vjust = -0.4,
+  show_ticks = TRUE,
+  axis_text_x_size = 12,
+  axis_text_y_size = 12,
+  axis_title_y_size = 14,
+  y_expand = 0.12,
+  width = 6,
+  height = 4
 ) {
 
   # ----------------------------------------
@@ -71,8 +96,14 @@ make_barchart <- function(
       count(.data[[variable]], name = "n") |>
       mutate(pct = n / sum(n) * 100)
 
+    # Fill and outline opacity set separately via scales::alpha() rather than
+    # geom_col's own `alpha=` (which would force both to match) - defaults
+    # keep them equal (this function's original look); pass outline_alpha=1
+    # for a muted fill / full-strength outline, as in make_truncated_histogram.
+    fill_colour <- if (is.null(bar_colour)) palette[1] else bar_colour
     p <- ggplot(plot_data, aes(x = .data[[variable]], y = pct)) +
-      geom_col(fill = palette[1], colour = palette[1], alpha = 0.8, linewidth = 0.3)
+      geom_col(fill = scales::alpha(fill_colour, alpha),
+               colour = scales::alpha(fill_colour, outline_alpha), linewidth = linewidth)
 
   } else {
 
@@ -123,7 +154,8 @@ make_barchart <- function(
   if (show_pct_labels) {
     if (is.null(group_var)) {
       p <- p + geom_text(aes(label = paste0(round(pct), "%")),
-                          vjust = -0.4, size = 4, family = font_family)
+                          vjust = label_vjust, size = label_size, family = font_family,
+                          colour = "black")
     } else {
       p <- p + geom_text(aes(label = paste0(round(pct), "%")),
                           position = position_dodge(width = 0.8),
@@ -135,32 +167,43 @@ make_barchart <- function(
   # Theme and labels (no x-axis title or ticks; category names on the axis
   # text are enough to identify each bar)
   # ----------------------------------------
+  # Either fully removed (matches make_truncated_histogram, show_ticks =
+  # FALSE) or the original visible y-axis ticks (show_ticks = TRUE, default).
+  ticks_theme <- if (show_ticks) {
+    theme(
+      axis.ticks.x      = element_blank(),
+      axis.ticks.y      = element_line(colour = "black", linewidth = 0.4),
+      axis.ticks.length = unit(3, "pt")
+    )
+  } else {
+    theme(axis.ticks = element_blank())
+  }
+
   p <- p +
     labs(
       x = NULL,
       y = "Percent"
     ) +
-    scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.12))) +
-    theme_minimal(base_family = font_family, base_size = 14) +
+    scale_y_continuous(labels = comma, expand = expansion(mult = c(0, y_expand))) +
+    theme_minimal(base_family = font_family, base_size = base_size) +
     theme(
       legend.position    = if (!is.null(group_var)) "bottom" else "none",
       legend.text        = element_text(size = 13),
       axis.title.x       = element_blank(),
-      axis.title.y       = element_text(size = 14),
-      axis.text          = element_text(size = 12),
-      axis.ticks.x       = element_blank(),
+      axis.title.y       = element_text(size = axis_title_y_size),
+      axis.text.x        = element_text(size = axis_text_x_size),
+      axis.text.y        = element_text(size = axis_text_y_size),
       axis.line          = element_line(colour = "black", linewidth = 0.4),
-      axis.ticks.y       = element_line(colour = "black", linewidth = 0.4),
-      axis.ticks.length  = unit(3, "pt"),
       panel.grid.major.x = element_blank(),
       panel.grid.minor   = element_blank(),
       panel.grid.major.y = element_line(colour = "grey85", linewidth = 0.3)
-    )
+    ) +
+    ticks_theme
 
   # ----------------------------------------
   # Save to PDF
   # ----------------------------------------
-  ggsave(output_path, plot = p, width = 6, height = 4, device = "pdf")
+  ggsave(output_path, plot = p, width = width, height = height, device = "pdf")
 
   p
 }
