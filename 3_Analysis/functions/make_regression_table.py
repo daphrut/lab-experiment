@@ -13,6 +13,11 @@ def make_regression_table(
     decimals=3,  # int or list[int], one per model column
     mean_decimals=0,  # int or list[int], decimal places for baseline mean row
     r2_type=None,
+    wcb_pvals=None,
+    ri_pvals=None,
+    wcb_label="WCB $p$-value",
+    ri_label="RI $p$-value",
+    pval_decimals=3,
     col1_width="5.5cm",
     coln_width="2cm",
     col_widths=None,
@@ -43,6 +48,19 @@ def make_regression_table(
     decimals        : int, decimal places for coefficients (default 3)
     r2_type         : "None" by default, "within" for TWFE (R² Within), "adjr2" for OLS (Adjusted R²),
                       or "both" to show both rows
+    wcb_pvals       : optional list of length n_models, wild cluster bootstrap
+                      p-values for the table's key coefficient (one column
+                      may be None to leave that cell blank, e.g. a spec the
+                      check wasn't run for). Adds a row above "Number of
+                      observations" if given.
+    ri_pvals        : optional list of length n_models, randomization
+                      inference p-values for the same coefficient - same
+                      row-placement/blank-cell convention as wcb_pvals.
+    wcb_label, ri_label : row labels for the above
+    pval_decimals   : decimal places for wcb_pvals/ri_pvals (plain numbers,
+                      no significance stars - these are already p-values,
+                      not coefficients, so stars would double up on what the
+                      number itself already says)
     col1_width      : width of the first column (row labels)
     coln_width      : width of model number columns (if the same)
     col_widths      : optional list of column widths for model columns i.e. 2 onwards (overrides coln_width)
@@ -200,6 +218,18 @@ def make_regression_table(
     # Bottom panel
     # ---------------------------
 
+    def fmt_pval(v):
+        return f"${fmt_val(v, pval_decimals)}$" if v is not None else ""
+
+    # Wild cluster bootstrap / randomization inference p-values (for the
+    # table's key coefficient only, not per-row like the SEs above)
+    if wcb_pvals is not None:
+        lines.append(f"{wcb_label} & " + " & ".join(fmt_pval(v) for v in wcb_pvals) + r" \\")
+    if ri_pvals is not None:
+        lines.append(f"{ri_label} & " + " & ".join(fmt_pval(v) for v in ri_pvals) + r" \\")
+    if wcb_pvals is not None or ri_pvals is not None:
+        lines.append(r"\addlinespace[0.2cm]")
+
     # Observations
     obs_row = "Number of observations & " + " & ".join(
         [f"${fmt_val(get_nobs(fit), 0)}$" for fit in fit_list]
@@ -267,6 +297,9 @@ def make_regression_table(
         lines.append(f"{baseline_mean_label} & " + " & ".join(mean_vals) + r" \\")
 
     lines.append(r"\addlinespace[0.2cm]")
+    if fe_rows is not None:
+        lines.append(r"\hline")
+        lines.append(r"\addlinespace[0.1cm]")
 
     # ---------------------------
     # FE rows (optional)
