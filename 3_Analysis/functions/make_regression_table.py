@@ -36,6 +36,9 @@ def make_regression_table(
                       if None, FE rows are omitted entirely
     col_groups      : optional dict for top-level column groupings
                       e.g. {"Baseline": [0,1], "Robustness": [2,3]}
+                      columns not listed in any group get a blank header cell
+                      and no cmidrule under them (e.g. a lead-in column that
+                      isn't part of the grouping)
     col_subgroups   : optional dict for second-level column groupings
                       e.g. {"Levels": [0,2], "Log": [1,3]}
     baseline_mean   : optional. Pass "auto" to compute from df_levels,
@@ -150,17 +153,36 @@ def make_regression_table(
     # Top-level column groups
     # ---------------------------
     if col_groups is not None:
+        idx_to_group = {}
+        for group_name, col_indices in col_groups.items():
+            for idx in col_indices:
+                idx_to_group[idx] = group_name
+
+        # Walk columns left to right, merging consecutive columns in the same
+        # group (or consecutive ungrouped columns) into one span
+        spans = []
+        i = 0
+        while i < n_models:
+            g = idx_to_group.get(i)
+            j = i
+            while j + 1 < n_models and idx_to_group.get(j + 1) == g:
+                j += 1
+            spans.append((g, i, j))
+            i = j + 1
+
         group_row = " "
         cmidrule_parts = []
-        for group_name, col_indices in col_groups.items():
-            span  = len(col_indices)
-            start = min(col_indices) + 2  # +2: 1 for label col, 1 for 1-indexing
-            end   = max(col_indices) + 2
-            group_row += f" & \\multicolumn{{{span}}}{{c}}{{{group_name}}}"
-            cmidrule_parts.append(f"\\cmidrule(lr){{{start}-{end}}}")
+        for group_name, start_idx, end_idx in spans:
+            span = end_idx - start_idx + 1
+            group_row += f" & \\multicolumn{{{span}}}{{c}}{{{group_name or ''}}}"
+            if group_name is not None:
+                start = start_idx + 2  # +2: 1 for label col, 1 for 1-indexing
+                end   = end_idx + 2
+                cmidrule_parts.append(f"\\cmidrule(lr){{{start}-{end}}}")
         group_row += r" \\"
         lines.append(group_row)
-        lines.append(" ".join(cmidrule_parts))
+        if cmidrule_parts:
+            lines.append(" ".join(cmidrule_parts))
 
     # ---------------------------
     # Second-level subgroups
@@ -296,15 +318,13 @@ def make_regression_table(
         ]
         lines.append(f"{baseline_mean_label} & " + " & ".join(mean_vals) + r" \\")
 
-    lines.append(r"\addlinespace[0.2cm]")
-    if fe_rows is not None:
-        lines.append(r"\hline")
-        lines.append(r"\addlinespace[0.1cm]")
-
     # ---------------------------
     # FE rows (optional)
     # ---------------------------
     if fe_rows is not None:
+        lines.append(r"\addlinespace[0.2cm]")
+        lines.append(r"\hline")
+        lines.append(r"\addlinespace[0.1cm]")
         for fe_label, fe_vals in fe_rows.items():
             fe_row = f"{fe_label} & " + " & ".join(
                 [checkmark_or_dash(v) for v in fe_vals]
