@@ -37,20 +37,22 @@ def make_checklist_text_table(
     items,
     question_text,
     item_categories,
-    shares,
-    ns,
+    shares_bl,
+    shares_el,
     section_headers=None,
     caption=None,
     label=None,
     question_label="Question",
     category_label="Category",
-    share_label="Achievement share (\\%)",
-    n_label="N",
+    bl_share_label="BL Share (\\%)",
+    el_share_label="EL Share (\\%)",
+    change_label="Change (p.p.)",
     decimals=0,
-    col1_width="10.5cm",
+    col1_width="8.5cm",
     col2_width="1.8cm",
     col3_width="1.5cm",
-    col4_width="0.8cm",
+    col4_width="1.5cm",
+    col5_width="1.3cm",
     font_size=r"\tiny",
     align="c",
     row_spacing="0.03cm",
@@ -58,10 +60,14 @@ def make_checklist_text_table(
 ):
     """
     Create a LaTeX longtable of checklist questions with their full text: for each
-    question, its category and the share of labs with "Yes" at baseline out of labs
-    with a substantive answer ("Yes"/"No"/"I don't know") at baseline - i.e. N/A and
-    unanswered are excluded from the denominator, unlike make_checklist_tables'
-    baseline "Yes (%)" column, which is of a fixed sample size.
+    question, its category, the share of labs with "Yes" at baseline and at endline
+    out of labs with a substantive answer ("Yes"/"No"/"I don't know") at that wave -
+    i.e. N/A and unanswered are excluded from each wave's own denominator, unlike
+    make_checklist_tables' "Yes (%)" column, which is of a fixed sample size - and the
+    percentage-point change between the two (EL minus BL; blank if either wave's share
+    is undefined for that question). Since it reports both waves, the caller should
+    restrict to the labs with both BL and EL data (unlike a BL-only table, which
+    doesn't need that restriction) - see 7_2_checklist_text_table.ipynb.
 
     A longtable, not a tabular, since with 49 full-text questions this table is too
     long for one page: it breaks across pages, repeating the column header (and, if
@@ -75,8 +81,8 @@ def make_checklist_text_table(
     Without scalebox to shrink an oversized table to fit, the column widths must
     themselves add up to less than the real page \\textwidth (this project's document
     is 12pt article + fullpage, ~1in margins, so \\textwidth is roughly 16.5cm) - the
-    defaults here total 10.5+1.8+1.5+0.8=14.6cm, leaving headroom for the ~1.1cm of
-    \\tabcolsep spacing LaTeX inserts between the 4 columns. font_size (\\tiny by
+    defaults here total 8.5+1.8+1.5+1.5+1.3=14.6cm, leaving headroom for the ~1.4cm of
+    \\tabcolsep spacing LaTeX inserts between the 5 columns. font_size (\\tiny by
     default, wrapped around the whole longtable) buys back some of the room lost by
     no longer being able to scale the table down, at the cost of smaller print -
     \\tiny is LaTeX's smallest standard size command.
@@ -88,8 +94,8 @@ def make_checklist_text_table(
 
     Top-level tier section headers (e.g. "Bronze Checklist", bolded), each closed
     before the next. Question/Category cells are top-aligned to their first line
-    (array's p{} rather than m{} middle-valign) so a 1-line Category/Share cell sits
-    level with the first line of a wrapped multi-line question.
+    (array's p{} rather than m{} middle-valign) so a 1-line Category/Share/Change cell
+    sits level with the first line of a wrapped multi-line question.
 
     Parameters
     ----------
@@ -97,23 +103,22 @@ def make_checklist_text_table(
     question_text    : dict {item_key: full question text} (see load_checklist_question_text) -
                         LaTeX-escaped here, so pass the raw questionnaire wording
     item_categories  : dict {item_key: category label}, e.g. "General Lab"
-    shares           : dict {item_key: share of "Yes" among substantive BL answers,
+    shares_bl        : dict {item_key: share of "Yes" among substantive BL answers,
                         as a percentage 0-100; NaN where there are no substantive answers}
-    ns               : dict {item_key: number of labs with a substantive BL answer} -
-                        the share column's denominator, shown in its own "N" column
-                        since it varies a lot by question (e.g. only labs with fume
-                        cupboards answer the fume cupboard question)
+    shares_el        : dict {item_key: same, at endline}
     section_headers  : optional dict {header: [item_keys]} - a bolded, full-width
                         header row is inserted above the first such item (in `items`
                         order)
     caption, label   : optional \\caption/\\label text, placed inside the longtable
                         itself (a plain \\caption{} only works inside a float, which a
                         longtable is not) - pass both or neither
-    question_label, category_label, share_label, n_label : column headers
-    decimals         : decimal places for the share
-    col1_width, col2_width, col3_width, col4_width : column widths (question,
-                        category, share, N) - must fit the real page width, see above;
-                        there's no scalebox safety net here
+    question_label, category_label, bl_share_label, el_share_label, change_label :
+                        column headers
+    decimals         : decimal places for the shares and the change
+    col1_width, col2_width, col3_width, col4_width, col5_width : column widths
+                        (question, category, BL share, EL share, change) - must fit
+                        the real page width, see above; there's no scalebox safety
+                        net here
     font_size        : LaTeX size command wrapped around the whole table (e.g.
                         "\\scriptsize" for a less extreme size), or None for the
                         document's normal size
@@ -133,9 +138,6 @@ def make_checklist_text_table(
         if v != v:  # NaN
             return ""
         return f"${v:.{decimals}f}$"
-
-    def fmt_n(v):
-        return f"${int(v)}$" if v == v else ""  # NaN check
 
     # Question text comes straight from the questionnaire spreadsheet, so unlike
     # item_categories/section_headers (hand-written with any needed LaTeX escaping
@@ -171,11 +173,12 @@ def make_checklist_text_table(
         f">{{\\raggedright\\arraybackslash}}p{{{col2_width}}}"
         f">{{\\centering\\arraybackslash}}p{{{col3_width}}}"
         f">{{\\centering\\arraybackslash}}p{{{col4_width}}}"
+        f">{{\\centering\\arraybackslash}}p{{{col5_width}}}"
     )
     header_row = [
         r"\hline",
         f"\\addlinespace[{row_spacing}]",
-        f"{question_label} & {category_label} & {share_label} & {n_label} \\\\",
+        f"{question_label} & {category_label} & {bl_share_label} & {el_share_label} & {change_label} \\\\",
         r"\hline",
         f"\\addlinespace[{row_spacing}]",
     ]
@@ -207,16 +210,19 @@ def make_checklist_text_table(
                 # table's own column header.
                 lines.append(r"\hline")
                 lines.append(f"\\addlinespace[{section_spacing}]")
-            lines.append(f"\\multicolumn{{4}}{{@{{}}l}}{{\\textbf{{{header}}}}} \\\\")
+            lines.append(f"\\multicolumn{{5}}{{@{{}}l}}{{\\textbf{{{header}}}}} \\\\")
             lines.append(f"\\addlinespace[{row_spacing}]")
             emitted_headers.add(header)
 
         label_str = escape_latex(question_text.get(item, ""))
         category_str = item_categories.get(item, "")
-        share_str = fmt_share(shares.get(item, float("nan")))
-        n_str = fmt_n(ns.get(item, float("nan")))
+        bl_v = shares_bl.get(item, float("nan"))
+        el_v = shares_el.get(item, float("nan"))
+        bl_str = fmt_share(bl_v)
+        el_str = fmt_share(el_v)
+        change_str = fmt_share(el_v - bl_v) if bl_v == bl_v and el_v == el_v else ""
 
-        lines.append(f"{label_str} & {category_str} & {share_str} & {n_str} \\\\")
+        lines.append(f"{label_str} & {category_str} & {bl_str} & {el_str} & {change_str} \\\\")
         lines.append(f"\\addlinespace[{row_spacing}]")
 
     # No trailing \hline here - \endlastfoot above already supplies the table's
