@@ -11,6 +11,8 @@ def make_ml_comparison_table(
     col1_width="6cm",
     coln_width="2.5cm",
     col_widths=None,
+    model_numbers=None,
+    section_labels=None,
 ):
     """
     Create a LaTeX comparison table for regularized/ML model coefficients
@@ -36,6 +38,11 @@ def make_ml_comparison_table(
     col1_width  : width of the first column (row labels)
     coln_width  : width of model number columns (if the same)
     col_widths  : optional list of column widths for model columns (overrides coln_width)
+    model_numbers : optional list of strings, one per model column, e.g. ["(1)", "(2)"] -
+                  added as its own row directly below model_names if given
+    section_labels : optional dict mapping a keep_vars entry to a subtitle string,
+                  inserted as its own italicized row directly above that variable's
+                  row - e.g. {"topic_2": "Research topics"} to label a group of rows
     """
 
     n_models = len(model_coefs)
@@ -60,11 +67,16 @@ def make_ml_comparison_table(
     lines.append(r"\hline")
     lines.append(r"\addlinespace[0.2cm]")
     lines.append(" & " + " & ".join(model_names) + r" \\")
+    if model_numbers is not None:
+        lines.append(" & " + " & ".join(model_numbers) + r" \\")
     lines.append(r"\hline")
     lines.append(r"\addlinespace[0.2cm]")
 
     # Coefficient rows - one row per variable, no SE row underneath (none exist)
     for var in keep_vars:
+        if section_labels is not None and var in section_labels:
+            lines.append(f"\\multicolumn{{{n_models + 1}}}{{l}}{{\\textit{{{section_labels[var]}}}}} \\\\")
+            lines.append(r"\addlinespace[0.1cm]")
         label_str = var_labels.get(var, var.replace("_", " "))
         row_vals = []
         for i, coefs in enumerate(model_coefs):

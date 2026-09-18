@@ -35,6 +35,24 @@ def normalize_weights(edges, id_col_i, id_col_j, weight_col, all_ids, symmetric=
     return W.div(row_sums.replace(0, np.nan), axis=0).fillna(0)
 
 
+def build_membership_weights(sharing_df, all_ids, id_col="labgroupid", partner_col="sample_group"):
+    """
+    Build a row-normalized weight matrix from a lab group membership list (e.g.
+    share_equip_groups_cleaned.csv), where wij = 1 if labgroupid i reported
+    partner_col j (or vice versa) as a shared group, 0 otherwise.
+
+    Rows with a missing partner_col, and self-referencing rows (id_col == partner_col),
+    are dropped before building edges. Duplicate (id_col, partner_col) pairs collapse
+    to a single tie, since weights are binary, not counts.
+    """
+    edges = sharing_df.dropna(subset=[partner_col]).copy()
+    edges[partner_col] = edges[partner_col].astype(int)
+    edges = edges[edges[id_col] != edges[partner_col]]
+    edges = edges[[id_col, partner_col]].drop_duplicates()
+    edges["weight"] = 1
+    return normalize_weights(edges, id_col_i=id_col, id_col_j=partner_col, weight_col="weight", all_ids=all_ids)
+
+
 def compute_exposure(weight_matrix, treated):
     """
     Si = sum_j wij * treated_j.

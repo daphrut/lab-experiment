@@ -13,6 +13,11 @@ def make_regression_table(
     decimals=3,  # int or list[int], one per model column
     mean_decimals=0,  # int or list[int], decimal places for baseline mean row
     r2_type=None,
+    wcb_pvals=None,
+    ri_pvals=None,
+    wcb_label="WCB $p$-value",
+    ri_label="RI $p$-value",
+    pval_decimals=3,
     col1_width="5.5cm",
     coln_width="2cm",
     col_widths=None,
@@ -31,6 +36,9 @@ def make_regression_table(
                       if None, FE rows are omitted entirely
     col_groups      : optional dict for top-level column groupings
                       e.g. {"Baseline": [0,1], "Robustness": [2,3]}
+                      columns not listed in any group get a blank header cell
+                      and no cmidrule under them (e.g. a lead-in column that
+                      isn't part of the grouping)
     col_subgroups   : optional dict for second-level column groupings
                       e.g. {"Levels": [0,2], "Log": [1,3]}
     baseline_mean   : optional. Pass "auto" to compute from df_levels,
@@ -43,6 +51,19 @@ def make_regression_table(
     decimals        : int, decimal places for coefficients (default 3)
     r2_type         : "None" by default, "within" for TWFE (R² Within), "adjr2" for OLS (Adjusted R²),
                       or "both" to show both rows
+    wcb_pvals       : optional list of length n_models, wild cluster bootstrap
+                      p-values for the table's key coefficient (one column
+                      may be None to leave that cell blank, e.g. a spec the
+                      check wasn't run for). Adds a row above "Number of
+                      observations" if given.
+    ri_pvals        : optional list of length n_models, randomization
+                      inference p-values for the same coefficient - same
+                      row-placement/blank-cell convention as wcb_pvals.
+    wcb_label, ri_label : row labels for the above
+    pval_decimals   : decimal places for wcb_pvals/ri_pvals (plain numbers,
+                      no significance stars - these are already p-values,
+                      not coefficients, so stars would double up on what the
+                      number itself already says)
     col1_width      : width of the first column (row labels)
     coln_width      : width of model number columns (if the same)
     col_widths      : optional list of column widths for model columns i.e. 2 onwards (overrides coln_width)
@@ -132,17 +153,36 @@ def make_regression_table(
     # Top-level column groups
     # ---------------------------
     if col_groups is not None:
+        idx_to_group = {}
+        for group_name, col_indices in col_groups.items():
+            for idx in col_indices:
+                idx_to_group[idx] = group_name
+
+        # Walk columns left to right, merging consecutive columns in the same
+        # group (or consecutive ungrouped columns) into one span
+        spans = []
+        i = 0
+        while i < n_models:
+            g = idx_to_group.get(i)
+            j = i
+            while j + 1 < n_models and idx_to_group.get(j + 1) == g:
+                j += 1
+            spans.append((g, i, j))
+            i = j + 1
+
         group_row = " "
         cmidrule_parts = []
-        for group_name, col_indices in col_groups.items():
-            span  = len(col_indices)
-            start = min(col_indices) + 2  # +2: 1 for label col, 1 for 1-indexing
-            end   = max(col_indices) + 2
-            group_row += f" & \\multicolumn{{{span}}}{{c}}{{{group_name}}}"
-            cmidrule_parts.append(f"\\cmidrule(lr){{{start}-{end}}}")
+        for group_name, start_idx, end_idx in spans:
+            span = end_idx - start_idx + 1
+            group_row += f" & \\multicolumn{{{span}}}{{c}}{{{group_name or ''}}}"
+            if group_name is not None:
+                start = start_idx + 2  # +2: 1 for label col, 1 for 1-indexing
+                end   = end_idx + 2
+                cmidrule_parts.append(f"\\cmidrule(lr){{{start}-{end}}}")
         group_row += r" \\"
         lines.append(group_row)
-        lines.append(" ".join(cmidrule_parts))
+        if cmidrule_parts:
+            lines.append(" ".join(cmidrule_parts))
 
     # ---------------------------
     # Second-level subgroups
@@ -199,6 +239,18 @@ def make_regression_table(
     # ---------------------------
     # Bottom panel
     # ---------------------------
+
+    def fmt_pval(v):
+        return f"${fmt_val(v, pval_decimals)}$" if v is not None else ""
+
+    # Wild cluster bootstrap / randomization inference p-values (for the
+    # table's key coefficient only, not per-row like the SEs above)
+    if wcb_pvals is not None:
+        lines.append(f"{wcb_label} & " + " & ".join(fmt_pval(v) for v in wcb_pvals) + r" \\")
+    if ri_pvals is not None:
+        lines.append(f"{ri_label} & " + " & ".join(fmt_pval(v) for v in ri_pvals) + r" \\")
+    if wcb_pvals is not None or ri_pvals is not None:
+        lines.append(r"\addlinespace[0.2cm]")
 
     # Observations
     obs_row = "Number of observations & " + " & ".join(
@@ -266,12 +318,13 @@ def make_regression_table(
         ]
         lines.append(f"{baseline_mean_label} & " + " & ".join(mean_vals) + r" \\")
 
-    lines.append(r"\addlinespace[0.2cm]")
-
     # ---------------------------
     # FE rows (optional)
     # ---------------------------
     if fe_rows is not None:
+        lines.append(r"\addlinespace[0.2cm]")
+        lines.append(r"\hline")
+        lines.append(r"\addlinespace[0.1cm]")
         for fe_label, fe_vals in fe_rows.items():
             fe_row = f"{fe_label} & " + " & ".join(
                 [checkmark_or_dash(v) for v in fe_vals]

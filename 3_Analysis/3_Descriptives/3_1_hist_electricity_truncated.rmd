@@ -1,0 +1,278 @@
+---
+title: "Electricity Consumption Histograms (Sensitivity-Proof, Truncated)"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    self_contained: true
+---
+
+This is a sensitivity-proof variant of `3_1_hist_electricity.rmd`, for any audience
+where the plain histogram there is too granular: `annual_electricity_total` is
+strongly right-skewed with a handful of labs far out in the tail (e.g. single
+labs alone in a 10,000 kWh-wide bin above 100,000 kWh). Two fixes,
+applied together via `make_truncated_histogram()`:
+
+1. **Open-ended top bin.** Everything at or above `THRESHOLD` (50 MWh) is
+   collapsed into a single bar, labelled `>=50`, showing only the
+   aggregate share of labs up there - never a finer breakdown of who they are.
+2. **Minimum bin-width rule.** Below `THRESHOLD`, the binwidth is chosen so
+   every bin holds at least `MIN_BIN_COUNT` labs, checked directly against the
+   data for every panel below. The overall and BL-vs-EL panels have enough
+   labs to support a finer `OVERALL_BINWIDTH`; the treatment/faculty splits
+   divide the sample further and need the wider `GROUPED_BINWIDTH` to still
+   satisfy the rule in their smallest subgroup. The function warns if a chosen
+   binwidth doesn't hold for a given panel.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.show = "show")
+```
+
+```{r config-and-libraries, include=FALSE}
+library(here)
+library(dplyr)
+
+# Load config and functions
+source(here("config.R"))
+source(here("3_Analysis", "functions", "histogram_truncated_func.r"))
+
+# Output directory
+hist_dir <- file.path(OUTPUT, "6_Histograms")
+dir.create(hist_dir, showWarnings = FALSE, recursive = TRUE)
+```
+
+```{r load-data}
+df <- read.csv(file.path(CLEAN_DATA, "final_dataset.csv"))
+```
+
+```{r create-vars}
+# Create MNF variable
+df <- df %>% mutate(MNF = ifelse(faculty == "Faculty of Science (MNF)", 1, 0))
+
+# Work in MWh rather than kWh - more readable bin labels once the axis is a
+# small number of discrete categories rather than a continuous kWh scale
+df <- df %>% mutate(annual_electricity_mwh = annual_electricity_total / 1000)
+```
+
+```{r separate-bl-el}
+# Restrict df to only those labgroupids with BL and EL data
+df_sample <- df %>%
+  group_by(labgroupid) %>%
+  filter(n() == 2) %>%
+  ungroup()
+
+# Separate BL and EL
+df_bl_all <- df %>% filter(survey == "BL")
+df_bl_sample <- df_sample %>% filter(survey == "BL")
+df_el <- df %>% filter(survey == "EL")
+```
+
+```{r disclosure-params}
+# Truncation threshold and minimum bin-width rule, applied consistently across
+# every panel below. Two binwidths, both the finest that still satisfies
+# "every bin >= MIN_BIN_COUNT labs" for their respective panels (checked
+# against the data, not assumed):
+#   - OVERALL_BINWIDTH: for the overall and BL-vs-EL panels, which have
+#     enough labs to support finer resolution than the grouped panels.
+#   - GROUPED_BINWIDTH: for the treatment/faculty splits, which divide the
+#     sample further - their smallest subgroup (EL, non-MNF, n=32) needs the
+#     wider bin to still hold >= MIN_BIN_COUNT labs per bin.
+THRESHOLD        <- 50    # MWh
+OVERALL_BINWIDTH <- 12.5  # MWh
+GROUPED_BINWIDTH <- 25    # MWh
+MIN_BIN_COUNT    <- 5
+LABEL_SUFFIX     <- " MWh"   # unit folded into each bin label, e.g. "0-12.5 MWh"
+FONT_FAMILY      <- "serif"  # matches the paper's Times-style LaTeX typesetting
+```
+
+# Overall Distribution
+
+```{r overall-bl}
+# BL overall - all groups
+make_truncated_histogram(
+  df            = df_bl_all,
+  variable      = "annual_electricity_mwh",
+  threshold     = THRESHOLD,
+  binwidth      = OVERALL_BINWIDTH,
+  min_bin_count = MIN_BIN_COUNT,
+  output_file   = "hist_electricity_bl_overall_truncated.pdf",
+  show_median   = TRUE,
+  median_digits = 1,
+  label_suffix  = LABEL_SUFFIX,
+  font_family   = FONT_FAMILY,
+  output_dir    = hist_dir
+)
+```
+
+```{r overall-bl-sample}
+# BL overall - sample with BL and EL data
+make_truncated_histogram(
+  df            = df_bl_sample,
+  variable      = "annual_electricity_mwh",
+  threshold     = THRESHOLD,
+  binwidth      = OVERALL_BINWIDTH,
+  min_bin_count = MIN_BIN_COUNT,
+  output_file   = "hist_electricity_bl_overall_sample_truncated.pdf",
+  show_median   = TRUE,
+  median_digits = 1,
+  label_suffix  = LABEL_SUFFIX,
+  font_family   = FONT_FAMILY,
+  output_dir    = hist_dir
+)
+```
+
+```{r overall-el}
+# EL overall
+make_truncated_histogram(
+  df            = df_el,
+  variable      = "annual_electricity_mwh",
+  threshold     = THRESHOLD,
+  binwidth      = OVERALL_BINWIDTH,
+  min_bin_count = MIN_BIN_COUNT,
+  output_file   = "hist_electricity_el_overall_truncated.pdf",
+  show_median   = TRUE,
+  median_digits = 1,
+  label_suffix  = LABEL_SUFFIX,
+  font_family   = FONT_FAMILY,
+  output_dir    = hist_dir
+)
+```
+
+
+# By Treatment Status
+
+```{r treatment-bl}
+# BL by treatment - all groups
+make_truncated_histogram(
+  df            = df_bl_all,
+  variable      = "annual_electricity_mwh",
+  threshold     = THRESHOLD,
+  binwidth      = GROUPED_BINWIDTH,
+  min_bin_count = MIN_BIN_COUNT,
+  group_var     = "treated",
+  group_labels  = list("0" = "Control", "1" = "Treatment"),
+  output_file   = "hist_electricity_bl_by_treatment_truncated.pdf",
+  show_median   = TRUE,
+  median_digits = 1,
+  label_suffix  = LABEL_SUFFIX,
+  font_family   = FONT_FAMILY,
+  output_dir    = hist_dir
+)
+```
+
+```{r treatment-bl-sample}
+# BL by treatment - sample with BL and EL data
+make_truncated_histogram(
+  df            = df_bl_sample,
+  variable      = "annual_electricity_mwh",
+  threshold     = THRESHOLD,
+  binwidth      = GROUPED_BINWIDTH,
+  min_bin_count = MIN_BIN_COUNT,
+  group_var     = "treated",
+  group_labels  = list("0" = "Control", "1" = "Treatment"),
+  output_file   = "hist_electricity_bl_by_treatment_sample_truncated.pdf",
+  show_median   = TRUE,
+  median_digits = 1,
+  label_suffix  = LABEL_SUFFIX,
+  font_family   = FONT_FAMILY,
+  output_dir    = hist_dir
+)
+```
+
+```{r treatment-el}
+# EL by treatment
+make_truncated_histogram(
+  df            = df_el,
+  variable      = "annual_electricity_mwh",
+  threshold     = THRESHOLD,
+  binwidth      = GROUPED_BINWIDTH,
+  min_bin_count = MIN_BIN_COUNT,
+  group_var     = "treated",
+  group_labels  = list("0" = "Control", "1" = "Treatment"),
+  output_file   = "hist_electricity_el_by_treatment_truncated.pdf",
+  show_median   = TRUE,
+  median_digits = 1,
+  label_suffix  = LABEL_SUFFIX,
+  font_family   = FONT_FAMILY,
+  output_dir    = hist_dir
+)
+```
+
+# By Faculty
+
+```{r faculty-bl}
+# BL by faculty - all groups
+make_truncated_histogram(
+  df            = df_bl_all,
+  variable      = "annual_electricity_mwh",
+  threshold     = THRESHOLD,
+  binwidth      = GROUPED_BINWIDTH,
+  min_bin_count = MIN_BIN_COUNT,
+  group_var     = "MNF",
+  group_labels  = list("0" = "Medicine or Joint", "1" = "Science"),
+  output_file   = "hist_electricity_bl_by_faculty_truncated.pdf",
+  show_median   = TRUE,
+  median_digits = 1,
+  label_suffix  = LABEL_SUFFIX,
+  font_family   = FONT_FAMILY,
+  output_dir    = hist_dir
+)
+```
+
+```{r faculty-bl-sample}
+# BL by faculty - sample with BL and EL data
+make_truncated_histogram(
+  df            = df_bl_sample,
+  variable      = "annual_electricity_mwh",
+  threshold     = THRESHOLD,
+  binwidth      = GROUPED_BINWIDTH,
+  min_bin_count = MIN_BIN_COUNT,
+  group_var     = "MNF",
+  group_labels  = list("0" = "Medicine or Joint", "1" = "Science"),
+  output_file   = "hist_electricity_bl_by_faculty_sample_truncated.pdf",
+  show_median   = TRUE,
+  median_digits = 1,
+  label_suffix  = LABEL_SUFFIX,
+  font_family   = FONT_FAMILY,
+  output_dir    = hist_dir
+)
+```
+
+```{r faculty-el}
+# EL by faculty
+make_truncated_histogram(
+  df            = df_el,
+  variable      = "annual_electricity_mwh",
+  threshold     = THRESHOLD,
+  binwidth      = GROUPED_BINWIDTH,
+  min_bin_count = MIN_BIN_COUNT,
+  group_var     = "MNF",
+  group_labels  = list("0" = "Medicine or Joint", "1" = "Science"),
+  output_file   = "hist_electricity_el_by_faculty_truncated.pdf",
+  show_median   = TRUE,
+  median_digits = 1,
+  label_suffix  = LABEL_SUFFIX,
+  font_family   = FONT_FAMILY,
+  output_dir    = hist_dir
+)
+```
+
+
+# BL vs EL Comparison
+
+```{r bl-vs-el}
+# BL vs EL comparison - sample with BL and EL data
+make_truncated_histogram(
+  df            = df_sample,
+  variable      = "annual_electricity_mwh",
+  threshold     = THRESHOLD,
+  binwidth      = OVERALL_BINWIDTH,
+  min_bin_count = MIN_BIN_COUNT,
+  group_var     = "survey",
+  output_file   = "hist_electricity_bl_vs_el_truncated.pdf",
+  show_median   = TRUE,
+  median_digits = 1,
+  label_suffix  = LABEL_SUFFIX,
+  font_family   = FONT_FAMILY,
+  output_dir    = hist_dir
+)
+```
