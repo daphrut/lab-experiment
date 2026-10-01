@@ -232,7 +232,7 @@ make_truncated_histogram <- function(
   # Theme and labels
   # ----------------------------------------
   p <- p +
-    labs(x = x_label, y = "Percent") +
+    labs(x = x_label, y = "Share (%)") +
     scale_y_continuous(expand = expansion(mult = c(0, 0.15))) +
     theme_minimal(base_family = font_family, base_size = 16) +
     theme(

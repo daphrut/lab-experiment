@@ -182,7 +182,7 @@ make_barchart <- function(
   p <- p +
     labs(
       x = NULL,
-      y = "Percent"
+      y = "Share (%)"
     ) +
     scale_y_continuous(labels = comma, expand = expansion(mult = c(0, y_expand))) +
     theme_minimal(base_family = font_family, base_size = base_size) +
