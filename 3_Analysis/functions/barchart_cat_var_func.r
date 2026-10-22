@@ -153,11 +153,11 @@ make_barchart <- function(
   # ----------------------------------------
   if (show_pct_labels) {
     if (is.null(group_var)) {
-      p <- p + geom_text(aes(label = paste0(round(pct), "%")),
+      p <- p + geom_text(aes(label = round(pct)),
                           vjust = label_vjust, size = label_size, family = font_family,
                           colour = "black")
     } else {
-      p <- p + geom_text(aes(label = paste0(round(pct), "%")),
+      p <- p + geom_text(aes(label = round(pct)),
                           position = position_dodge(width = 0.8),
                           vjust = -0.4, size = 4, family = font_family)
     }
