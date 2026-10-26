@@ -1,0 +1,50 @@
+item,tier,question_number,question_text,energy_relevance,equipment,calculator_inputs,note
+bronze_q_1,Bronze,1,A full assessment of laboratory equipment is completed to determine which items can be switched off and there are systems in place to maintain power management of equipment.,direct,All equipment,"hours, days",Switching off reduces usage hours of usage-based equipment
+bronze_q_2,Bronze,2,Purified water sources are used appropriately based on an assessment of the purity required for specific tasks.,none,,,
+bronze_q_3,Bronze,3,In-House Production is utilised to reduce wastage and save resources.,none,,,
+bronze_q_4,Bronze,4,Recycle: Waste streams are properly separated to/and allow recycling with laboratories,none,,,
+bronze_q_5,Bronze,5,Onboarding Training: All new laboratory members receive a sustainability induction.,none,,,
+bronze_q_6,Bronze,6,"Prior to the purchase of new equipment, the group considers repair, purchasing used equipment, or using existing equipment",none,,,
+bronze_q_7,Bronze,7,Paper and printing is minimised,none,,,
+bronze_q_8,Bronze,8,"Energy-Saving Modes: All electronic devices and computer screens, are configured to use energy-saving settings where compatible with accessibility",indirect,IT,hours,IT formula has no sleep-mode term
+bronze_q_9,Bronze,9,Commuting: Employees are encouraged to commute by bicycle or public transportation. Carpooling is recommended where public transport is not an option.,none,,,
+bronze_q_10,Bronze,10,ULT freezers are managed and maintained to optimise energy efficiency performace.,direct,ULT freezer,"seals, spacing, filter, door_openings",
+bronze_q_11,Bronze,11,Swap water-jet aspirators for vacuum pumps,none,,,
+bronze_q_12,Bronze,12,Solvent Emission Control: Waste containers for solvents are equipped with closed funnels or lids to minimize evaporation and volatile emissions into the (laboratory) environment.,none,,,
+bronze_q_13,Bronze,13,Waste canisters: reuse empty solvent jerrycans as labeled waste cans,none,,,
+bronze_q_14,Bronze,14,Reuse cartridges for automated flash column chromatography systems up to 5x (reverse phase up to 100x) as suggested by the supplier.,none,,,
+bronze_q_15,Bronze,15,"Green Engineering Principles: 12 Principles of Green Engineering as well as the Sandestin Declaration: 9 Principles of Green Engineering are known to all researchers, displayed in the laboratory, and applied where scientifically feasible to minimize the environmental impact of chemical processes and engineering.",none,,,
+bronze_q_16,Bronze,16,All fume cupboard sashes are kept closed when not in use,direct,Fume cupboard,hours_open,VAV fume cupboards only
+silver_q_1,Silver,1,Equipment operation is optimised for energy efficiency.,indirect,All equipment,"hours, days, door_openings",Vague wording
+silver_q_2,Silver,2,Equipment maintenance and longevity: Laboratory equipment is regularly maintained and serviced to extend operational lifespan and ensure energy efficiency,indirect,"ULT, freezer","seals, filter, icing",
+silver_q_3,Silver,3,"Laboratory water consumption is minimised through equipment operation, maintenace and water-saving measures.",none,,,
+silver_q_4,Silver,4,Reuse: The lab has reviewed its use of consumables and identified those which may be reused.,none,,,
+silver_q_5,Silver,5,"Experimental design is optimised (for material efficiency). Sample numbers, volumes and materials consumed are minimised. Workflows are organized to maximize material efficiency.",none,,,
+silver_q_6,Silver,6,Engagement of sustainability is managed in the laboratory through team or coordination.,none,,,
+silver_q_7,Silver,7,"For the purchase of any consumables, those with the lowest environmental impact are selected.",none,,,
+silver_q_8,Silver,8,"When purchasing, suppliers are engaged for low-carbon shipping options (take-back schemes, reduced packaging, and ambient temperature delivery) and these are implemented.",none,,,
+silver_q_9,Silver,9,"Accessibility of Venues: Event venues are selected based on good access via public transportation. If this is not feasible, organized shuttle services or shared transport options are provided. Directions to the venue include information on environmentally friendly travel options.",none,,,
+silver_q_10,Silver,10,Digital Communication: Unnecessary newsletters and mailing lists are unsubscribed from. Large files are shared via secure links rather than email attachments to reduce data transfer loads.,none,,,
+silver_q_11,Silver,11,"Reduced Travel Frequency: Participation in recurring conferences is optimized by reducing the frequency of attendance (e.g., every second event) or by joining regional conference hubs to avoid long-distance travel.",none,,,
+silver_q_12,Silver,12,Samples and reagents are stored at appropriate temperatures for preservation and to minimise the energy demand of cooling devices.,indirect,"ULT, freezer",set_temp,Only if set temperature enters baseline kWh
+silver_q_13,Silver,13,Switch to safer and renewable solvents (and eluents for chromatography) by default.,none,,,
+silver_q_14,Silver,14,"Rightsize reactions: run reactions on the smallest scale possible, run pilot/DoE and literature‐informed scouting before scale-up;  optimize for the right amount of solvent during extraction, apply the 12 Principles (catalysis, safer solvents, atom economy) and use biobased building blocks where possible.",none,,,
+silver_q_15,Silver,15,Replace oil pumps with scroll or screw pumps,none,,,Pumps not in calculator
+silver_q_16,Silver,16,Consider improving your high-pressure liquid chromatography (HPLC) purification by using HPLC columns with smaller inner diameter to reduce solvent consumption and waste creation.,none,,,
+silver_q_17,Silver,17,"Rotary evaporators: Ensure water baths have a cover. For instance, use plastic water bath balls for rotary evaporators to cover the open water. They prevent heat loss, evaporation (up to 90%), reduce oxygen input, reduce odors and levels of algae growth in the water. Furthermore avoid running the rotary evaporator overnight, unless required.",direct,Water bath,"lid, hours",Only if rotavap baths are recorded as water baths
+silver_q_18,Silver,18,"Any permanently stored equipment in the fume cupboard is mounted to permit a flow of air underneath, possibly through supporting tiles",direct,Fume cupboard,lifted,VAV fume cupboards only
+gold_q_1,Gold,1,"For the purchase of new equipment, relevant sustainability and performance criteria are utilised in technical specifications",indirect,All equipment,"type, refrigerant",Only via equipment replaced during the study
+gold_q_2,Gold,2,"Equipment is shared (where feasible) using systems to share equipment locally, across the organisation and externally (as appropriate).",indirect,All equipment,number,Sharing could reduce number of units
+gold_q_3,Gold,3,Autoclave and glasswasher operations are optimised in consideration of water and energy efficency.,none,,,Autoclaves and glasswashers not in calculator (glassware = drying cabinets)
+gold_q_4,Gold,4,Harmful or environmentally impactful chemicals and reagents are reviewed for substition for more ecological options.,none,,,
+gold_q_5,Gold,5,"Centralized Ordering: A designated person is responsible for lab orders, and orders are conducted on a weekly basis (not daily).",none,,,
+gold_q_6,Gold,6,Reproducibility of experiments is critically considered regularly.,none,,,
+gold_q_7,Gold,7,"Sustainable Event Organization: When hosting  events, environmental aspects are prioritized.",none,,,
+gold_q_8,Gold,8,Virtual and Hybrid Meetings: Online or hybrid conferencing formats are considered to reduce travel emissions while maintaining  collaboration and accessibility.,none,,,
+gold_q_9,Gold,9,"Avoiding Air Travel: Business flights are avoided whenever possible. When air travel is unavoidable, high-quality carbon offset programs are used to compensate for emissions.",none,,,
+gold_q_10,Gold,10,Sample storage and freezer management practices optimise ultilisation of freezer storage space.,indirect,"ULT, freezer","number, drawers, door_openings",
+gold_q_11,Gold,11,"End single-pass water cooling:Single pass cooling should be avoided to preserve water resources. Replace water cooled condensers with air-cooled or Vigreux condensers (air-cooled condensers work the best for solvents with boiling points >50 °C); for low-b.p. solvents, use closed-loop recirculators/thermostats. Furthermore add paddle-wheel flow meters on any recirculating loops.",none,,,Water use; recirculators would if anything add energy
+gold_q_12,Gold,12,Replace oil baths with metal heating blocks.,indirect,"Heat block, bath",,Oil baths probably not recorded in the equipment survey
+gold_q_13,Gold,13,Implement an electronic lab journal.,none,,,
+gold_q_14,Gold,14,"Consider the optimization of your purification process: an extraction, distillation, or recrystallization process can be faster, less expensive, and less solvent consuming than column chromatography.",none,,,
+gold_q_15,Gold,15,"When fume cupboards are due for annual inspection, owners ensure that the rates of extraction are not increased unnecessarily.",direct,Fume cupboard,face_velocity,
