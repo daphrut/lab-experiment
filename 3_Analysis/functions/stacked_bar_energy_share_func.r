@@ -104,12 +104,12 @@ make_energy_share_bar <- function(
   # Build plot
   # ----------------------------------------
   # Only label segments with room for a legible number - a share below
-  # `label_min_pct` renders as a sliver a few pixels wide, and a "2.1%"
+  # `label_min_pct` renders as a sliver a few pixels wide, and a "2.1"
   # label on it would overflow into neighbouring segments rather than
   # sitting inside its own. The unlabelled small segments are still
   # identified in the legend.
   plot_data$label <- ifelse(plot_data$pct >= label_min_pct,
-                             sprintf("%.1f%%", plot_data$pct), "")
+                             sprintf("%.1f", plot_data$pct), "")
 
   p <- ggplot(plot_data, aes(x = bar, y = pct, fill = equipment)) +
     geom_col(position = position_stack(reverse = TRUE), colour = "black",

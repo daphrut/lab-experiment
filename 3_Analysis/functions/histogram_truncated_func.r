@@ -22,7 +22,7 @@
 #   2. Open-ended top bin: all values >= threshold are collapsed
 #      into a single bar showing only the aggregate share at or
 #      above threshold - never a finer breakdown of the tail. Its
-#      own label (e.g. ">=50") and % annotation make clear it's an
+#      own label (e.g. ">=50") and share annotation make clear it's an
 #      aggregate; it's otherwise styled identically to the other
 #      bars.
 # ============================================================
@@ -143,7 +143,7 @@ make_truncated_histogram <- function(
   # the conventional bar-chart layout for comparing groups -
   # rather than overlapping semi-transparent histograms. The top
   # bin is styled identically to the regular bins; its label and
-  # % annotation are what mark it as an aggregate.
+  # share annotation are what mark it as an aggregate.
   # ----------------------------------------
   if (is.null(group_var)) {
     p <- ggplot(bar_data, aes(x = bin_label, y = pct)) +
@@ -194,12 +194,12 @@ make_truncated_histogram <- function(
   # per-group colour, so it stays legible regardless of bar fill.
   if (is.null(group_var)) {
     p <- p + geom_text(
-      data = bar_data, aes(x = bin_label, y = pct, label = paste0(round(pct, 1), "%")),
+      data = bar_data, aes(x = bin_label, y = pct, label = round(pct, 1)),
       inherit.aes = FALSE, vjust = -0.6, size = 4.6, family = font_family, colour = "black"
     )
   } else {
     p <- p + geom_text(
-      data = bar_data, aes(x = bin_label, y = pct, group = group, label = paste0(round(pct, 1), "%")),
+      data = bar_data, aes(x = bin_label, y = pct, group = group, label = round(pct, 1)),
       position = dodge, vjust = -0.6, size = 4.2, family = font_family, colour = "black"
     )
   }
