@@ -28,7 +28,10 @@ def make_equipment_energy_table(
                     "label"       : panel heading, e.g. "Overall"
                     "df"          : DataFrame with columns "label", "mean_energy",
                                      "mean_units", one row per equipment type,
-                                     in the order to display
+                                     in the order to display. Optional boolean
+                                     column "suppress": rows where True are
+                                     shown as "--" in every data column
+                                     (disclosure control)
                     "total_energy": group's mean of total energy (all types)
                     "total_units" : group's mean of total unit count (all types)
     energy_label, units_label, per_unit_label : column headers
@@ -45,10 +48,12 @@ def make_equipment_energy_table(
         sign = r"\llap{-}" if val < 0 else " "
         return f"${sign}{magnitude}$"
 
-    def data_row(label, energy, units, bold=False):
+    def data_row(label, energy, units, bold=False, suppress=False):
         per_unit = energy / units if units > 0 else float("nan")
         vals = [fmt_val(energy, energy_decimals), fmt_val(units, units_decimals),
                 fmt_val(per_unit, energy_decimals)]
+        if suppress:
+            vals = ["--"] * 3
         label_str = f"\\textbf{{{label}}}" if bold else label
         return f"{label_str} & " + " & ".join(vals) + r" \\"
 
@@ -67,7 +72,8 @@ def make_equipment_energy_table(
         lines.append(r"\addlinespace[0.1cm]")
 
         for _, row in panel["df"].iterrows():
-            lines.append(data_row(row["label"], row["mean_energy"], row["mean_units"]))
+            lines.append(data_row(row["label"], row["mean_energy"], row["mean_units"],
+                                  suppress=bool(row.get("suppress", False))))
             lines.append(r"\addlinespace[0.1cm]")
 
         lines.append(r"\addlinespace[0.05cm]")

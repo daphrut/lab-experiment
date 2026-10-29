@@ -140,21 +140,20 @@ def make_tips_frequency_table(
     no_tips_label="No tips displayed",
     tip_label="Tip",
     equipment_label="Equipment",
-    count_label="Research groups",
-    share_label="Share of using groups",
+    share_label="Share of using groups (\\%)",
     suppress_at=5,
+    bound_step=5,
     col1_width="18cm",
     col2_width="4.5cm",
-    col3_width="2.2cm",
-    col4_width="2.5cm",
+    col3_width="3.2cm",
 ):
     """
     Create a LaTeX table of tip frequency: for each (tip, equipment) combination, the
-    number of distinct labgroupids shown that tip (counted once per lab even if shown
-    for multiple appliance "types" of that equipment), and that count as a share of
-    only the labs that actually own that equipment type (not of every lab in the
-    sample). Closed with "Any tip displayed" and "No tips displayed" summary rows
-    giving the number of labs whose calculator did and didn't show any tips at all.
+    share of labs shown that tip (counted once per lab even if shown for multiple
+    appliance "types" of that equipment), out of only the labs that actually own that
+    equipment type (not of every lab in the sample). Counts themselves are not shown.
+    Closed with "Any tip displayed" and "No tips displayed" summary rows giving the
+    share of all labs in the sample whose calculator did and didn't show any tips.
 
     Same visual conventions as make_balance_table/make_equipment_energy_table.
 
@@ -166,28 +165,40 @@ def make_tips_frequency_table(
                        compute_equipment_ownership for how to build these columns)
     any_tips_count  : number of distinct labgroupids with at least one tip displayed
     no_tips_count   : number of distinct labgroupids with no tips displayed
-    tip_label, equipment_label, count_label, share_label : column headers
-    suppress_at     : small-cell disclosure control - any n_labs count at or below this
-                       threshold is shown as "<= {suppress_at}" in the count column and
-                       "-" in the share column (a percentage would let the exact count
-                       be backed out from a known denominator), so a specific lab can't
-                       be identified from a count of 1. n_equipment_labs (the share's
-                       denominator) is never itself suppressed - equipment ownership
-                       alone doesn't identify which labs were shown a tip.
+    tip_label, equipment_label, share_label : column headers
+    suppress_at     : small-cell disclosure control - a share whose n_labs count is at
+                       or below this threshold is bottom-coded as "< X" (an exact
+                       percentage would let the count be backed out from a known
+                       denominator), and a share whose complement (owners not shown the
+                       tip) is at or below it is top-coded as "> Y". X / Y are the
+                       tightest multiples of bound_step whose implied count range still
+                       includes counts above suppress_at - e.g. 5 of 31 owners -> "< 20"
+                       (20% of 31 = 6.2), since "< 15" would pin the count below 5 - so
+                       the bound reveals no more than a plain suppression would.
                        Set to None to disable and always show exact values.
-    col1_width, col2_width, col3_width, col4_width : column widths (tip, equipment,
-                       count, share)
+    bound_step      : rounding step (percentage points) for the bounds above
+    col1_width, col2_width, col3_width : column widths (tip, equipment, share)
     """
 
-    def fmt_count(n):
-        if suppress_at is not None and n <= suppress_at:
-            return f"$\\leq {suppress_at}$"
-        return f"${n:,}$".replace(",", "{,}")
-
+    # The < / > of a bounded share hangs left via \llap (zero width), so its digits line
+    # up with the exact shares. Wrapped in $...$ since \llap's box is in text mode,
+    # where a bare < / > would print as an inverted punctuation mark.
     def fmt_share(n, d):
         if suppress_at is not None and n <= suppress_at:
-            return "$-$"
-        return f"${100 * n / d:.1f}\\%$"
+            # Smallest multiple of bound_step with bound * d / 100 > suppress_at
+            bound = bound_step
+            while bound * d / 100 <= suppress_at:
+                bound += bound_step
+            return f"$\\llap{{$<$}}{bound}$"
+        if suppress_at is not None and 0 < d - n <= suppress_at:
+            # Largest multiple of bound_step with (100 - bound) * d / 100 > suppress_at
+            bound = 100 - bound_step
+            while (100 - bound) * d / 100 <= suppress_at:
+                bound -= bound_step
+            return f"$\\llap{{$>$}}{bound}$"
+        return f"${100 * n / d:.1f}$"
+
+    n_sample = int(any_tips_count) + int(no_tips_count)
 
     # Top-align each cell to its first line (via array's p{} rather than the L/C
     # macros' m{} middle-valign) so a 1-line equipment/count cell sits level with the
@@ -197,12 +208,11 @@ def make_tips_frequency_table(
         f"@{{}}>{{\\raggedright\\arraybackslash}}p{{{col1_width}}}"
         f">{{\\raggedright\\arraybackslash}}p{{{col2_width}}}"
         f">{{\\centering\\arraybackslash}}p{{{col3_width}}}"
-        f">{{\\centering\\arraybackslash}}p{{{col4_width}}}"
     )
     lines.append(f"\\begin{{tabular}}{{{col_spec}}}")
     lines.append(r"\hline")
     lines.append(r"\addlinespace[0.2cm]")
-    lines.append(f"{tip_label} & {equipment_label} & {count_label} & {share_label} \\\\")
+    lines.append(f"{tip_label} & {equipment_label} & {share_label} \\\\")
     lines.append(r"\hline")
     lines.append(r"\addlinespace[0.2cm]")
 
@@ -210,16 +220,15 @@ def make_tips_frequency_table(
         n_labs = int(row["n_labs"])
         n_equipment_labs = int(row["n_equipment_labs"])
         lines.append(
-            f"{row['tip']} & {row['equipment']} & {fmt_count(n_labs)} & "
-            f"{fmt_share(n_labs, n_equipment_labs)} \\\\"
+            f"{row['tip']} & {row['equipment']} & {fmt_share(n_labs, n_equipment_labs)} \\\\"
         )
         lines.append(r"\addlinespace[0.15cm]")
 
     lines.append(r"\hline")
     lines.append(r"\addlinespace[0.15cm]")
-    lines.append(f"{any_tips_label} & & {fmt_count(int(any_tips_count))} & \\\\")
+    lines.append(f"{any_tips_label} & & {fmt_share(int(any_tips_count), n_sample)} \\\\")
     lines.append(r"\addlinespace[0.15cm]")
-    lines.append(f"{no_tips_label} & & {fmt_count(int(no_tips_count))} & \\\\")
+    lines.append(f"{no_tips_label} & & {fmt_share(int(no_tips_count), n_sample)} \\\\")
     lines.append(r"\addlinespace[0.2cm]")
     lines.append(r"\hline")
     lines.append(r"\end{tabular}")
