@@ -1,3 +1,5 @@
+import re
+
 import openpyxl
 import pandas as pd
 
@@ -37,22 +39,26 @@ def make_checklist_text_table(
     items,
     question_text,
     item_categories,
-    shares_bl,
-    shares_el,
+    yes_counts,
+    substantive_counts,
+    energy_labels=None,
+    min_count=5,
+    top_code=90,
     section_headers=None,
     caption=None,
     label=None,
+    note=None,
     question_label="Question",
     category_label="Category",
-    bl_share_label="BL Share (\\%)",
-    el_share_label="EL Share (\\%)",
-    change_label="Change (p.p.)",
+    energy_label="Energy-relevant",
+    share_label="BL Share (\\%)",
+    suppressed_str="--",
     decimals=0,
-    col1_width="8.5cm",
-    col2_width="1.8cm",
+    col1_width="11.4cm",
+    col2_width="1.6cm",
+    energy_width="1.8cm",
     col3_width="1.5cm",
-    col4_width="1.5cm",
-    col5_width="1.3cm",
+    note_width="14.5cm",
     font_size=r"\tiny",
     align="c",
     row_spacing="0.03cm",
@@ -60,14 +66,22 @@ def make_checklist_text_table(
 ):
     """
     Create a LaTeX longtable of checklist questions with their full text: for each
-    question, its category, the share of labs with "Yes" at baseline and at endline
-    out of labs with a substantive answer ("Yes"/"No"/"I don't know") at that wave -
-    i.e. N/A and unanswered are excluded from each wave's own denominator, unlike
-    make_checklist_tables' "Yes (%)" column, which is of a fixed sample size - and the
-    percentage-point change between the two (EL minus BL; blank if either wave's share
-    is undefined for that question). Since it reports both waves, the caller should
-    restrict to the labs with both BL and EL data (unlike a BL-only table, which
-    doesn't need that restriction) - see 7_2_checklist_text_table.ipynb.
+    question, its category and the share of labs with "Yes" out of labs with a
+    substantive answer ("Yes"/"No"/"I don't know") - i.e. N/A and unanswered are
+    excluded from the denominator - plus, if energy_labels is given, a column
+    marking which actions can move the energy measure. 7_2_checklist_text_table.ipynb uses this for
+    baseline only: a BL-vs-EL comparison can't be shown per question without
+    disclosing small groups of labs (see disclosure control below).
+
+    Disclosure control: no group of labs smaller than min_count may be identifiable,
+    so a share is only shown if both its "Yes" count and its not-"Yes" count are
+    either 0 or >= min_count (0 is fine - e.g. 100% "Yes" doesn't single out any
+    lab). A share failing this is shown as "$>$top_code" if it is above top_code
+    (the failing group is then the small not-"Yes" group, and the bound reveals no
+    more than a plain suppression marker would - that some group of 1 to
+    min_count-1 labs exists), otherwise as suppressed_str. The number of labs
+    behind each share is deliberately not shown, since N x share gives back the
+    exact counts. Pass top_code=None to never top-code.
 
     A longtable, not a tabular, since with 49 full-text questions this table is too
     long for one page: it breaks across pages, repeating the column header (and, if
@@ -81,11 +95,11 @@ def make_checklist_text_table(
     Without scalebox to shrink an oversized table to fit, the column widths must
     themselves add up to less than the real page \\textwidth (this project's document
     is 12pt article + fullpage, ~1in margins, so \\textwidth is roughly 16.5cm) - the
-    defaults here total 8.5+1.8+1.5+1.5+1.3=14.6cm, leaving headroom for the ~1.4cm of
-    \\tabcolsep spacing LaTeX inserts between the 5 columns. font_size (\\tiny by
-    default, wrapped around the whole longtable) buys back some of the room lost by
-    no longer being able to scale the table down, at the cost of smaller print -
-    \\tiny is LaTeX's smallest standard size command.
+    defaults here total 11.4+1.6+1.5=14.5cm, leaving headroom for the \\tabcolsep
+    spacing LaTeX inserts between the 3 columns. font_size (\\tiny by default,
+    wrapped around the whole longtable) buys back some of the room lost by no longer
+    being able to scale the table down, at the cost of smaller print - \\tiny is
+    LaTeX's smallest standard size command.
 
     align sets longtable's own optional alignment argument, \\begin{longtable}[align]:
     "c" (default) centers the table on the page, since a longtable narrower than
@@ -93,51 +107,74 @@ def make_checklist_text_table(
     which centers under \\centering.
 
     Top-level tier section headers (e.g. "Bronze Checklist", bolded), each closed
-    before the next. Question/Category cells are top-aligned to their first line
-    (array's p{} rather than m{} middle-valign) so a 1-line Category/Share/Change cell
-    sits level with the first line of a wrapped multi-line question.
+    before the next. Cells are top-aligned to their first line (array's p{} rather
+    than m{} middle-valign) so a 1-line Category/Share cell sits level with the first
+    line of a wrapped multi-line question.
 
     Parameters
     ----------
-    items            : list of item keys (e.g. "bronze_q_1") defining row order
-    question_text    : dict {item_key: full question text} (see load_checklist_question_text) -
-                        LaTeX-escaped here, so pass the raw questionnaire wording
-    item_categories  : dict {item_key: category label}, e.g. "General Lab"
-    shares_bl        : dict {item_key: share of "Yes" among substantive BL answers,
-                        as a percentage 0-100; NaN where there are no substantive answers}
-    shares_el        : dict {item_key: same, at endline}
-    section_headers  : optional dict {header: [item_keys]} - a bolded, full-width
-                        header row is inserted above the first such item (in `items`
-                        order)
-    caption, label   : optional \\caption/\\label text, placed inside the longtable
-                        itself (a plain \\caption{} only works inside a float, which a
-                        longtable is not) - pass both or neither
-    question_label, category_label, bl_share_label, el_share_label, change_label :
-                        column headers
-    decimals         : decimal places for the shares and the change
-    col1_width, col2_width, col3_width, col4_width, col5_width : column widths
-                        (question, category, BL share, EL share, change) - must fit
-                        the real page width, see above; there's no scalebox safety
-                        net here
-    font_size        : LaTeX size command wrapped around the whole table (e.g.
-                        "\\scriptsize" for a less extreme size), or None for the
-                        document's normal size
-    align            : longtable's own [l]/[c]/[r] page-alignment argument, or None to
-                        omit it (longtable's own default, "l")
-    row_spacing      : \\addlinespace gap used for every vertical gap in the table
-                        (header, section header, and between rows) - smaller tightens
-                        the table vertically, independent of font_size
-    section_spacing  : \\addlinespace gap used only where a new tier section starts
-                        (e.g. above "Silver Checklist") - together with a \\hline, this
-                        separates a section's last question from the next section's
-                        header row. Not used before the very first section, which
-                        already sits right below the table's own column header.
+    items              : list of item keys (e.g. "bronze_q_1") defining row order
+    question_text      : dict {item_key: full question text} (see load_checklist_question_text) -
+                          LaTeX-escaped here, so pass the raw questionnaire wording
+    item_categories    : dict {item_key: category label}, e.g. "General Lab"
+    yes_counts         : dict {item_key: number of labs answering "Yes"}
+    substantive_counts : dict {item_key: number of labs with a substantive answer}
+    energy_labels      : optional dict {item_key: text for the energy-relevance column,
+                          e.g. "Fume cupboard"; "" for not relevant} - LaTeX-escaped
+                          here. None omits the column (then col1_width can take its
+                          energy_width back)
+    min_count          : smallest group of labs that may be shown (see above)
+    top_code           : suppressed shares above this are shown as "$>$top_code"
+                          rather than suppressed_str; None to disable
+    section_headers    : optional dict {header: [item_keys]} - a bolded, full-width
+                          header row is inserted above the first such item (in `items`
+                          order)
+    caption, label     : optional \\caption/\\label text, placed inside the longtable
+                          itself (a plain \\caption{} only works inside a float, which a
+                          longtable is not) - pass both or neither
+    note               : optional table note (LaTeX), printed below the closing rule
+                          on the table's final page
+    question_label, category_label, energy_label, share_label : column headers
+    suppressed_str     : what a suppressed share is shown as
+    decimals           : decimal places for the shares
+    col1_width, col2_width, energy_width, col3_width : column widths (question,
+                          category, energy relevance, share) -
+                          must fit the real page width, see above; there's no
+                          scalebox safety net here
+    note_width         : width of the note's paragraph - roughly the column widths' sum
+    font_size          : LaTeX size command wrapped around the whole table (e.g.
+                          "\\scriptsize" for a less extreme size), or None for the
+                          document's normal size
+    align              : longtable's own [l]/[c]/[r] page-alignment argument, or None to
+                          omit it (longtable's own default, "l")
+    row_spacing        : \\addlinespace gap used for every vertical gap in the table
+                          (header, section header, and between rows) - smaller tightens
+                          the table vertically, independent of font_size
+    section_spacing    : \\addlinespace gap used only where a new tier section starts
+                          (e.g. above "Silver Checklist") - together with a \\hline, this
+                          separates a section's last question from the next section's
+                          header row. Not used before the very first section, which
+                          already sits right below the table's own column header.
     """
 
-    def fmt_share(v):
-        if v != v:  # NaN
+    def is_disclosive(count):
+        return 0 < count < min_count
+
+    def fmt_share(item):
+        n = substantive_counts.get(item, 0)
+        if n == 0:
             return ""
-        return f"${v:.{decimals}f}$"
+        yes = yes_counts.get(item, 0)
+        share = yes / n * 100
+        if is_disclosive(yes) or is_disclosive(n - yes):
+            if top_code is not None and share > top_code:
+                # \llap gives the ">" zero width, so the number itself is centered
+                # in line with the column's other numbers. \leavevmode first, since a
+                # p{} cell starts in vertical mode, where \llap's box would sit on a
+                # line of its own above the number instead of beside it
+                return f"\\leavevmode\\llap{{$>$}}${top_code}$"
+            return suppressed_str
+        return f"${share:.{decimals}f}$"
 
     # Question text comes straight from the questionnaire spreadsheet, so unlike
     # item_categories/section_headers (hand-written with any needed LaTeX escaping
@@ -156,10 +193,33 @@ def make_checklist_text_table(
         "}": r"\}",
         "~": r"\textasciitilde{}",
         "^": r"\textasciicircum{}",
+        # Text-mode < and > print as inverted !/? under pdflatex's default encoding
+        "<": r"$<$",
+        ">": r"$>$",
+        "°": r"$^{\circ}$",
+        "‐": "-",  # Unicode hyphen, not in pdflatex's default fonts
     }
 
-    def escape_latex(text):
+    # Numbers go in math mode, along with a leading </> and a trailing °C, so e.g.
+    # ">50 °C" becomes "$>50\,^{\circ}$C" rather than three separate pieces
+    NUMBER = re.compile(r"([<>]\s?)?(\d+(?:\.\d+)?)(\s?°C)?")
+
+    def escape_chars(text):
         return "".join(LATEX_SPECIAL.get(ch, ch) for ch in text)
+
+    def number_to_math(m):
+        op = m.group(1).strip() if m.group(1) else ""
+        degrees = r"\,^{\circ}$C" if m.group(3) else "$"
+        return f"${op}{m.group(2)}{degrees}"
+
+    def escape_latex(text):
+        out, pos = [], 0
+        for m in NUMBER.finditer(text):
+            out.append(escape_chars(text[pos:m.start()]))
+            out.append(number_to_math(m))
+            pos = m.end()
+        out.append(escape_chars(text[pos:]))
+        return "".join(out)
 
     header_for_item = {}
     if section_headers is not None:
@@ -171,14 +231,19 @@ def make_checklist_text_table(
     col_spec = (
         f"@{{}}>{{\\raggedright\\arraybackslash}}p{{{col1_width}}}"
         f">{{\\raggedright\\arraybackslash}}p{{{col2_width}}}"
-        f">{{\\centering\\arraybackslash}}p{{{col3_width}}}"
-        f">{{\\centering\\arraybackslash}}p{{{col4_width}}}"
-        f">{{\\centering\\arraybackslash}}p{{{col5_width}}}"
     )
+    header_cells = [question_label, category_label]
+    if energy_labels is not None:
+        col_spec += f">{{\\raggedright\\arraybackslash}}p{{{energy_width}}}"
+        header_cells.append(energy_label)
+    col_spec += f">{{\\centering\\arraybackslash}}p{{{col3_width}}}"
+    header_cells.append(share_label)
+    n_cols = len(header_cells)
+
     header_row = [
         r"\hline",
         f"\\addlinespace[{row_spacing}]",
-        f"{question_label} & {category_label} & {bl_share_label} & {el_share_label} & {change_label} \\\\",
+        " & ".join(header_cells) + r" \\",
         r"\hline",
         f"\\addlinespace[{row_spacing}]",
     ]
@@ -198,6 +263,9 @@ def make_checklist_text_table(
     lines += header_row
     lines.append(r"\endhead")
     lines.append(r"\hline")
+    if note is not None:
+        lines.append(f"\\addlinespace[{row_spacing}]")
+        lines.append(f"\\multicolumn{{{n_cols}}}{{@{{}}p{{{note_width}}}}}{{{note}}} \\\\")
     lines.append(r"\endlastfoot")
 
     for item in items:
@@ -210,19 +278,18 @@ def make_checklist_text_table(
                 # table's own column header.
                 lines.append(r"\hline")
                 lines.append(f"\\addlinespace[{section_spacing}]")
-            lines.append(f"\\multicolumn{{5}}{{@{{}}l}}{{\\textbf{{{header}}}}} \\\\")
+            lines.append(f"\\multicolumn{{{n_cols}}}{{@{{}}l}}{{\\textbf{{{header}}}}} \\\\")
             lines.append(f"\\addlinespace[{row_spacing}]")
             emitted_headers.add(header)
 
         label_str = escape_latex(question_text.get(item, ""))
         category_str = item_categories.get(item, "")
-        bl_v = shares_bl.get(item, float("nan"))
-        el_v = shares_el.get(item, float("nan"))
-        bl_str = fmt_share(bl_v)
-        el_str = fmt_share(el_v)
-        change_str = fmt_share(el_v - bl_v) if bl_v == bl_v and el_v == el_v else ""
+        cells = [label_str, category_str]
+        if energy_labels is not None:
+            cells.append(escape_latex(energy_labels.get(item, "")))
+        cells.append(fmt_share(item))
 
-        lines.append(f"{label_str} & {category_str} & {bl_str} & {el_str} & {change_str} \\\\")
+        lines.append(" & ".join(cells) + r" \\")
         lines.append(f"\\addlinespace[{row_spacing}]")
 
     # No trailing \hline here - \endlastfoot above already supplies the table's
